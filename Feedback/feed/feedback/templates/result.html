@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduFeedback Analytics - Results</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF (UMD build) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    @media print { .no-print { display: none; } }
+
+    /* Progress bar animation */
+    .progress-bar {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 9999px;
+      overflow: hidden;
+    .progress {
+      height: 100%;
+      transition: width 0.6s ease;
+    }
+
+    .dashboard-card {
+      color: white;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .dashboard-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+
+    /* Responsive table styles */
+    @media (max-width: 640px) {
+      table { border: 0; }
+      thead { display: none; }
+      tbody tr {
+        margin-bottom: 1rem;
+        display: block;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        padding: 1rem;
+      }
+      tbody td {
+        display: block;
+        text-align: right;
+        border: none;
+        position: relative;
+        padding-left: 50%;
+      }
+      tbody td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        width: 45%;
+        padding-left: 1rem;
+        font-weight: bold;
+        text-align: left;
+      }
+      tbody td:last-child { border-bottom: 0; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans antialiased text-gray-900">
+
+  <!-- Navbar -->
+  <nav class="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 flex justify-between items-center shadow-md border-b border-gray-200">
+    <h1 class="text-2xl font-semibold">EduFeedback Analytics</h1>
+    <a href="{% url 'upload' %}" 
+       class="bg-blue-600 text-white hover:bg-blue-700 font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
+       ← Back to Upload
+    </a>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="container mx-auto p-6 max-w-7xl">
+    <h2 class="text-2xl font-semibold mb-6 text-gray-800">Academic Results Dashboard</h2>
+
+    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h3 class="text-lg font-medium text-gray-700">Batch Code: {{ batch.batch_code }}</h3>
+          <h3 class="text-lg font-medium text-gray-700">Phase: {{ phase }}</h3>
+          <h3 class="text-lg font-medium text-gray-700">Total Students: {{ total_students }}</h3>
+          <h3 class="text-lg font-medium text-gray-700">Total Responsive: {{ total_responsive}}</h3>
+          <h3 class="text-lg font-medium text-gray-700">Date: {{ date}}</h3>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <!-- <div class="mb-6 flex flex-wrap gap-3 text-sm">
+        <span class="px-3 py-1 rounded bg-green-900 text-white">90 & above → Dark Green</span>
+        <span class="px-3 py-1 rounded bg-green-600 text-white">80–89 → Green</span>
+        <span class="px-3 py-1 rounded bg-green-400 text-white">75–79 → Light Green</span>
+        <span class="px-3 py-1 rounded bg-orange-500 text-white">65–74 → Orange</span>
+        <span class="px-3 py-1 rounded bg-red-400 text-white">64 & below → Light Red</span>
+      </div> -->
+
+      <!-- Dashboard Section -->
+      <div class="mb-8">
+        <h3 class="text-lg font-medium text-gray-700 mb-4">Subject Performance Overview</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {% for subject in subjects %}
+          <div class="dashboard-card p-5 rounded-lg shadow-sm 
+            {% if subject.average_percentage >= 90 %}
+              bg-green-900
+            {% elif subject.average_percentage >= 80 %}
+              bg-green-600
+            {% elif subject.average_percentage >= 75 %}
+              bg-green-400
+            {% elif subject.average_percentage >= 65 %}
+              bg-orange-500
+            {% else %}
+              bg-red-400
+            {% endif %}
+          ">
+            <p class="text-lg font-semibold">{{ subject.subject_name }}</p>
+            <p class="text-sm opacity-90 mt-1">Teacher: {{ subject.teacher.teacher_name }}</p>
+            <div class="mt-3">
+              <div class="text-right text-sm font-medium mb-1">{{ subject.average_percentage }}%</div>
+              <div class="progress-bar">
+                <div class="progress bg-white bg-opacity-30" style="width: {{ subject.average_percentage }}%;"></div>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <p class="text-red-600 col-span-full">No subjects found.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <hr class="border-gray-200 my-8">
+
+      <!-- Table Section -->
+      <div>
+        <h3 class="text-lg font-medium text-gray-700 mb-4">Detailed Results</h3>
+        <div class="overflow-x-auto">
+          <form id="remarks-form">
+            {% csrf_token %}
+            <table class="w-full border-collapse text-sm text-left text-gray-700">
+              <thead class="bg-gray-100 border-b border-gray-200">
+                <tr>
+                  <th class="p-3 font-medium">Subject</th>
+                  <th class="p-3 font-medium">Teacher</th>
+                  <th class="p-3 font-medium">Percentage</th>
+                  <th class="p-3 font-medium">Teacher Remark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for subject in subjects %}
+                <tr class="hover:bg-gray-50 border-b border-gray-200" data-teacher="{{ subject.teacher.teacher_name }}" data-subject-id="{{ subject.id }}">
+                  <td class="p-3" data-label="Subject">{{ subject.subject_name }}</td>
+                  <td class="p-3" data-label="Teacher">{{ subject.teacher.teacher_name }}</td>
+                  <td class="p-3" data-label="Percentage">{{ subject.average_percentage }}%</td>
+                  <td class="p-3" data-label="Teacher Remark">
+                    <input type="text" value="{{ subject.teacher_remarks|default:'' }}" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" name="remarks_{{ subject.id }}">
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="4" class="p-3 text-center text-gray-500">No subjects found.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </form>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex flex-wrap gap-3 justify-center mt-8 no-print">
+        <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Export to Excel</button>
+        <button onclick="exportToPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Export to PDF</button>
+        <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Print</button>
+        <a href="{% url 'report' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">View Report</a>
+        <button onclick="saveRemarks()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Save Remarks</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Get CSRF token
+    function getCsrfToken() {
+      return document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+    }
+
+    // Save Remarks
+    window.saveRemarks = function() {
+      const remarksData = {};
+      document.querySelectorAll("tbody tr").forEach(row => {
+        const subjectId = row.getAttribute("data-subject-id");
+        const remarkInput = row.querySelector("input[name^='remarks_']");
+        if (subjectId && remarkInput) {
+          remarksData[subjectId] = remarkInput.value.trim();
+        }
+      });
+
+      fetch("{% url 'save_remarks' batch_id=batch.id %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCsrfToken()
+        },
+        body: JSON.stringify(remarksData)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "success") {
+          alert("Remarks saved successfully!");
+        } else {
+          alert("Error: " + data.message);
+        }
+      })
+      .catch(err => {
+        console.error("Error:", err);
+        alert("An error occurred while saving remarks.");
+      });
+    };
+
+    // Export to Excel
+    window.exportToExcel = function() {
+      const data = [
+        ["Batch Code", "{{ batch.batch_code }}"],
+        ["Phase", "{{ phase }}"],
+        ["Total Students", "{{ total_students }}"],
+        ["Total Responsive", "{{ total_responsive }}"],
+        ["Date", "{{ date }}"],
+        [],
+        ["Subject", "Teacher", "Average Percentage", "Teacher Remarks"]
+      ];
+
+      document.querySelectorAll("tbody tr").forEach(row => {
+        const cols = row.querySelectorAll("td");
+        if (cols.length) {
+          const subject = cols[0].innerText.trim();
+          const teacher = cols[1].innerText.trim();
+          const percentage = cols[2].innerText.replace("%", "").trim();
+          const remarkInput = cols[3].querySelector("input");
+          const remark = remarkInput ? remarkInput.value : cols[3].innerText.trim();
+          data.push([subject, teacher, percentage, remark]);
+        }
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Results");
+      XLSX.writeFile(wb, "analysis_results.xlsx");
+    };
+
+    // Export to PDF
+    window.exportToPDF = function() {
+      const { jsPDF } = window.jspdf || {};
+      if (!jsPDF) {
+        alert("jsPDF library failed to load.");
+        return;
+      }
+
+      const doc = new jsPDF();
+
+      // Title
+      doc.setFontSize(14);
+      doc.text("Analysis Results", 14, 15);
+
+      // Batch Info
+      doc.setFontSize(11);
+      const details = [
+        ["Batch Code:", "{{ batch.batch_code }}"],
+        ["Phase:", "{{ phase }}"],
+        ["Total Students:", "{{ total_students }}"],
+        ["Total Responsive:", "{{ total_responsive }}"],
+        ["Date:", "{{ date }}"]
+      ];
+
+      let y = 25;
+      details.forEach(([label, value]) => {
+        doc.text(`${label} ${value}`, 14, y);
+        y += 7;
+      });
+
+      // Table
+      const tableData = [];
+      document.querySelectorAll("tbody tr").forEach(row => {
+        const cols = row.querySelectorAll("td");
+        if (cols.length) {
+          const subject = cols[0].innerText.trim();
+          const teacher = cols[1].innerText.trim();
+          const percentage = cols[2].innerText.trim();
+          const remarkInput = cols[3].querySelector("input");
+          const remark = remarkInput ? remarkInput.value : cols[3].innerText.trim();
+          tableData.push([subject, teacher, percentage, remark]);
+        }
+      });
+
+      doc.autoTable({
+        startY: y + 5,
+        head: [["Subject", "Teacher", "Percentage", "Teacher Remarks"]],
+        body: tableData,
+        theme: "grid",
+        styles: { fontSize: 10 }
+      });
+
+      doc.save("analysis_results.pdf");
+    };
+  </script>
+</body>
+</html>

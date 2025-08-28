@@ -1,0 +1,6 @@
+django
+pdf2image
+opencv-python
+numpy
+imutils
+pillow

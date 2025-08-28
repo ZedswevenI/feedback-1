@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduFeedback Analytics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .remove-subject { display: none; }
+    .subject:hover .remove-subject { display: inline-block; }
+    .subject {
+      position: relative;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.375rem;
+      padding: 1rem;
+      background-color: #ffffff;
+    }
+    .subject .remove-subject {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      width: 1.25rem;
+      height: 1.25rem;
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+    .error { border-color: #ef4444; }
+    .error-message {
+      color: #ef4444;
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      display: none;
+    }
+    input {
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      background-color: #ffffff;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+  <nav class="bg-blue-600 text-white p-4 flex justify-between items-center">
+    <h1 class="text-xl font-bold">EduFeedback Analytics</h1>
+  </nav>
+
+  <main class="container mx-auto p-6">
+    <h2 class="text-lg font-semibold mb-2">Upload OMR Sheet for Analysis</h2>
+    <p class="text-gray-600 mb-6">Upload student feedback OMR sheets and enter batch details for comprehensive analysis.</p>
+
+    <form method="POST" enctype="multipart/form-data" id="omrForm" class="bg-white p-6 rounded shadow">
+      {% csrf_token %}
+
+      <!-- Batch Info -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div>
+          <label class="block text-gray-700 font-medium">Batch Code *</label>
+          <input type="text" name="batch_code" placeholder=" BATCH2024A1" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <span class="error-message" id="batchCodeError">Batch Code is required.</span>
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium">Phase *</label>
+          <input type="text" name="phase" placeholder="Phase" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <span class="error-message" id="phaseError">Phase is required.</span>
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium">Total Students *</label>
+          <input type="number" name="total_students" placeholder="TotalStudents" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <span class="error-message" id="totalStudentsError">Total Students must be a positive number.</span>
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium">Total Responsive *</label>
+          <input type="number" name="total_responsive" placeholder="TotalResponsive" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <span class="error-message" id="totalResponsiveError">Total Responsive must be a positive number.</span>
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium">Date *</label>
+          <input type="date" name="date" id="dateField" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <span class="error-message" id="dateError">Please select a valid date.</span>
+        </div>
+      </div>
+
+      <!-- Subjects Section -->
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">Subjects</h3>
+        <button type="button" id="add-subject" 
+          class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-3 rounded-md">
+          + Add Subject
+        </button>
+      </div>
+
+      <div id="subjects">
+        <div class="subject mb-4">
+          <div class="w-full">
+            <h4 class="font-semibold mb-2">Subject 1</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-gray-700 font-medium">Subject Name *</label>
+                <input type="text" name="subject_name[]" placeholder="e.g. Physics, Chemistry, Mathematics" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+                <span class="error-message" id="subjectNameError_1">Subject Name is required.</span>
+              </div>
+              <div>
+                <label class="block text-gray-700 font-medium">Teacher Name *</label>
+                <input type="text" name="teacher_name[]" placeholder="e.g. Dr. Smith, Prof. Johnson" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+                <span class="error-message" id="teacherNameError_1">Teacher Name is required.</span>
+              </div>
+            </div>
+          </div>
+          <button type="button" 
+            class="remove-subject bg-red-500 hover:bg-red-600 text-white text-xs font-medium py-1 px-2 rounded absolute top-2 right-2">
+            -
+          </button>
+        </div>
+      </div>
+
+      <!-- File Upload -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700">OMR Sheet (PDF)</label>
+        <input type="file" id="omrFile" name="omr_sheet" accept=".pdf" class="mt-1 block w-full p-2 border rounded" required>
+        <span class="error-message" id="omrFileError">Please upload a valid PDF file (max 10MB).</span>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex justify-between gap-2">
+        <button type="reset" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-3 rounded-md flex-1">Reset Form</button>
+        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-3 rounded-md flex-1">Upload & Analyze</button>
+        <a href="{% url 'report' %}" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-3 rounded-md flex-1 text-center">View Report</a>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    let subjectCount = 1;
+
+    document.getElementById('add-subject').addEventListener('click', function() {
+      subjectCount++;
+      const newSubject = document.querySelector('.subject').cloneNode(true);
+      newSubject.querySelector('h4').textContent = `Subject ${subjectCount}`;
+      newSubject.querySelectorAll('input').forEach(input => input.value = '');
+      newSubject.querySelectorAll('.error-message').forEach(error => {
+        error.id = error.id.replace(/\d+/, subjectCount);
+      });
+      document.getElementById('subjects').appendChild(newSubject);
+      if (document.querySelectorAll('.subject').length > 1) {
+        document.querySelectorAll('.subject .remove-subject').forEach(btn => btn.style.display = 'inline-block');
+      }
+    });
+
+    document.getElementById('subjects').addEventListener('click', function(e) {
+      if (e.target.classList.contains('remove-subject')) {
+        const subjects = document.querySelectorAll('.subject');
+        if (subjects.length > 1) {
+          e.target.closest('.subject').remove();
+          document.querySelectorAll('.subject').forEach((sub, index) => {
+            sub.querySelector('h4').textContent = `Subject ${index + 1}`;
+          });
+          subjectCount--;
+          if (document.querySelectorAll('.subject').length === 1) {
+            document.querySelector('.remove-subject').style.display = 'none';
+          }
+        }
+      }
+    });
+
+    document.getElementById('omrForm').addEventListener('submit', function(e) {
+      let isValid = true;
+
+      // Validate Batch Code
+      const batchCode = document.querySelector('input[name="batch_code"]').value.trim();
+      if (!batchCode) {
+        document.querySelector('input[name="batch_code"]').classList.add('error');
+        document.getElementById('batchCodeError').style.display = 'block';
+        isValid = false;
+      } else {
+        document.querySelector('input[name="batch_code"]').classList.remove('error');
+        document.getElementById('batchCodeError').style.display = 'none';
+      }
+
+      // Validate Phase
+      const phase = document.querySelector('input[name="phase"]').value.trim();
+      if (!phase) {
+        document.querySelector('input[name="phase"]').classList.add('error');
+        document.getElementById('phaseError').style.display = 'block';
+        isValid = false;
+      } else {
+        document.querySelector('input[name="phase"]').classList.remove('error');
+        document.getElementById('phaseError').style.display = 'none';
+      }
+
+      // Validate Total Students
+      const totalStudents = parseInt(document.querySelector('input[name="total_students"]').value);
+      if (isNaN(totalStudents) || totalStudents <= 0) {
+        document.querySelector('input[name="total_students"]').classList.add('error');
+        document.getElementById('totalStudentsError').style.display = 'block';
+        isValid = false;
+      } else {
+        document.querySelector('input[name="total_students"]').classList.remove('error');
+        document.getElementById('totalStudentsError').style.display = 'none';
+      }
+
+      // Validate Total Responsive
+      const totalResponsive = parseInt(document.querySelector('input[name="total_responsive"]').value);
+      if (isNaN(totalResponsive) || totalResponsive <= 0 || totalResponsive > totalStudents) {
+        document.querySelector('input[name="total_responsive"]').classList.add('error');
+        document.getElementById('totalResponsiveError').style.display = 'block';
+        isValid = false;
+      } else {
+        document.querySelector('input[name="total_responsive"]').classList.remove('error');
+        document.getElementById('totalResponsiveError').style.display = 'none';
+      }
+
+      // Validate Subjects
+      const subjects = document.querySelectorAll('.subject');
+      subjects.forEach((subject, index) => {
+        const subjectName = subject.querySelector('input[name="subject_name[]"]').value.trim();
+        const teacherName = subject.querySelector('input[name="teacher_name[]"]').value.trim();
+        const subjectNameError = document.getElementById(`subjectNameError_${index + 1}`);
+        const teacherNameError = document.getElementById(`teacherNameError_${index + 1}`);
+
+        if (!subjectName) {
+          subject.querySelector('input[name="subject_name[]"]').classList.add('error');
+          subjectNameError.style.display = 'block';
+          isValid = false;
+        } else {
+          subject.querySelector('input[name="subject_name[]"]').classList.remove('error');
+          subjectNameError.style.display = 'none';
+        }
+
+        if (!teacherName) {
+          subject.querySelector('input[name="teacher_name[]"]').classList.add('error');
+          teacherNameError.style.display = 'block';
+          isValid = false;
+        } else {
+          subject.querySelector('input[name="teacher_name[]"]').classList.remove('error');
+          teacherNameError.style.display = 'none';
+        }
+      });
+
+      // Validate OMR Sheet
+      const omrFile = document.getElementById('omrFile').files[0];
+      if (!omrFile || !omrFile.name.endsWith('.pdf') || omrFile.size > 10 * 1024 * 1024) {
+        document.getElementById('omrFileError').style.display = 'block';
+        isValid = false;
+      } else {
+        document.getElementById('omrFileError').style.display = 'none';
+      }
+
+      if (!isValid) {
+        e.preventDefault();
+      }
+    });
+
+    // Auto-fill today's date in the Date field
+    document.addEventListener("DOMContentLoaded", function() {
+      const dateInput = document.getElementById("dateField");
+      const today = new Date().toISOString().split("T")[0];
+      dateInput.value = today;
+    });
+  </script>
+</body>
+</html>
