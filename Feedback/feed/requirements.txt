@@ -5,3 +5,4 @@ numpy
 imutils
 pillow
 PyPDF2
+gunicorn
