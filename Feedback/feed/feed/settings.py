@@ -26,7 +26,13 @@ SECRET_KEY = 'django-insecure-0z1u+b2yb*3aglqi^gsxjyi=8(e)e&^d6=6+q4kpw402iznwjv
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "feedback-1-production.up.railway.app",  # Railway default domain
+    "z7fb.in",                               # your custom root domain
+    "www.z7fb.in",                           
+]
 
 
 # Application definition
