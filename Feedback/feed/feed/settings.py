@@ -31,7 +31,8 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "feedback-1-production.up.railway.app",  # Railway default domain
     "z7fb.in",                               # your custom root domain
-    "www.z7fb.in",                           
+    "www.z7fb.in",  
+    "feed.z7fb.in",                          # your custom subdomain
 ]
 
 
