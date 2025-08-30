@@ -51,10 +51,10 @@ def parse_omr_pdf(omr_sheet, subject_names, total_responsive):
 
     hardcoded_subjects = {
         'Physics':   {'5_star': 400, '3_star': 100, '1_star': 100},  # 600
-        'Chemistry': {'5_star': 350, '3_star': 200, '1_star': 150},  # 600
-        'Maths':     {'5_star': 300, '3_star': 300, '1_star': 100},  # 600
+        'Chemistry': {'5_star': 400, '3_star': 200, '1_star': 150},  # 600
+        'Maths':     {'5_star': 400, '3_star': 300, '1_star': 100},  # 600
         'Computer':  {'5_star': 350, '3_star': 150, '1_star': 100},  # 600
-        'English':   {'5_star': 390, '3_star': 180, '1_star': 140},  # 600
+        'English':   {'5_star': 400, '3_star': 180, '1_star': 140},  # 600
         'Language':  {'5_star': 400, '3_star': 200, '1_star': 140},  # 600
         'Math':      {'5_star': 300, '3_star': 210, '1_star': 120},  # 600
         'Social':    {'5_star': 300, '3_star': 180, '1_star': 130},  # 600

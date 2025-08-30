@@ -13,12 +13,12 @@
   <style>
     @media print { .no-print { display: none; } }
 
-    /* Progress bar animation */
     .progress-bar {
       height: 8px;
       background: #e5e7eb;
       border-radius: 9999px;
       overflow: hidden;
+    }
     .progress {
       height: 100%;
       transition: width 0.6s ease;
@@ -31,36 +31,6 @@
     .dashboard-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    }
-
-    /* Responsive table styles */
-    @media (max-width: 640px) {
-      table { border: 0; }
-      thead { display: none; }
-      tbody tr {
-        margin-bottom: 1rem;
-        display: block;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        padding: 1rem;
-      }
-      tbody td {
-        display: block;
-        text-align: right;
-        border: none;
-        position: relative;
-        padding-left: 50%;
-      }
-      tbody td:before {
-        content: attr(data-label);
-        position: absolute;
-        left: 0;
-        width: 45%;
-        padding-left: 1rem;
-        font-weight: bold;
-        text-align: left;
-      }
-      tbody td:last-child { border-bottom: 0; }
     }
   </style>
 </head>
@@ -89,15 +59,6 @@
           <h3 class="text-lg font-medium text-gray-700">Date: {{ date}}</h3>
         </div>
       </div>
-
-      <!-- Legend -->
-      <!-- <div class="mb-6 flex flex-wrap gap-3 text-sm">
-        <span class="px-3 py-1 rounded bg-green-900 text-white">90 & above → Dark Green</span>
-        <span class="px-3 py-1 rounded bg-green-600 text-white">80–89 → Green</span>
-        <span class="px-3 py-1 rounded bg-green-400 text-white">75–79 → Light Green</span>
-        <span class="px-3 py-1 rounded bg-orange-500 text-white">65–74 → Orange</span>
-        <span class="px-3 py-1 rounded bg-red-400 text-white">64 & below → Light Red</span>
-      </div> -->
 
       <!-- Dashboard Section -->
       <div class="mb-8">
@@ -132,7 +93,6 @@
         </div>
       </div>
 
-      <!-- Divider -->
       <hr class="border-gray-200 my-8">
 
       <!-- Table Section -->
@@ -152,12 +112,14 @@
               </thead>
               <tbody>
                 {% for subject in subjects %}
-                <tr class="hover:bg-gray-50 border-b border-gray-200" data-teacher="{{ subject.teacher.teacher_name }}" data-subject-id="{{ subject.id }}">
-                  <td class="p-3" data-label="Subject">{{ subject.subject_name }}</td>
-                  <td class="p-3" data-label="Teacher">{{ subject.teacher.teacher_name }}</td>
-                  <td class="p-3" data-label="Percentage">{{ subject.average_percentage }}%</td>
-                  <td class="p-3" data-label="Teacher Remark">
-                    <input type="text" value="{{ subject.teacher_remarks|default:'' }}" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" name="remarks_{{ subject.id }}">
+                <tr class="hover:bg-gray-50 border-b border-gray-200" data-subject-id="{{ subject.id }}">
+                  <td class="p-3">{{ subject.subject_name }}</td>
+                  <td class="p-3">{{ subject.teacher.teacher_name }}</td>
+                  <td class="p-3">{{ subject.average_percentage }}%</td>
+                  <td class="p-3">
+                    <input type="text" value="{{ subject.teacher_remarks|default:'' }}" 
+                           class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                           name="remarks_{{ subject.id }}">
                   </td>
                 </tr>
                 {% empty %}
@@ -173,22 +135,33 @@
 
       <!-- Buttons -->
       <div class="flex flex-wrap gap-3 justify-center mt-8 no-print">
-        <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Export to Excel</button>
-        <button onclick="exportToPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Export to PDF</button>
-        <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Print</button>
-        <a href="{% url 'report' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">View Report</a>
-        <button onclick="saveRemarks()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">Save Remarks</button>
+        <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to Excel</button>
+        <button onclick="exportToPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to PDF</button>
+        <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Print</button>
+        <a href="{% url 'report' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">View Report</a>
+        <button onclick="saveRemarks()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Save Remarks</button>
       </div>
     </div>
   </main>
 
   <script>
-    // Get CSRF token
+    // ✅ Get CSRF token from cookie
     function getCsrfToken() {
-      return document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.startsWith("csrftoken=")) {
+            cookieValue = cookie.substring("csrftoken=".length);
+            break;
+          }
+        }
+      }
+      return cookieValue;
     }
 
-    // Save Remarks
+    // ✅ Save Remarks (AJAX with CSRF token)
     window.saveRemarks = function() {
       const remarksData = {};
       document.querySelectorAll("tbody tr").forEach(row => {
@@ -219,91 +192,6 @@
         console.error("Error:", err);
         alert("An error occurred while saving remarks.");
       });
-    };
-
-    // Export to Excel
-    window.exportToExcel = function() {
-      const data = [
-        ["Batch Code", "{{ batch.batch_code }}"],
-        ["Phase", "{{ phase }}"],
-        ["Total Students", "{{ total_students }}"],
-        ["Total Responsive", "{{ total_responsive }}"],
-        ["Date", "{{ date }}"],
-        [],
-        ["Subject", "Teacher", "Average Percentage", "Teacher Remarks"]
-      ];
-
-      document.querySelectorAll("tbody tr").forEach(row => {
-        const cols = row.querySelectorAll("td");
-        if (cols.length) {
-          const subject = cols[0].innerText.trim();
-          const teacher = cols[1].innerText.trim();
-          const percentage = cols[2].innerText.replace("%", "").trim();
-          const remarkInput = cols[3].querySelector("input");
-          const remark = remarkInput ? remarkInput.value : cols[3].innerText.trim();
-          data.push([subject, teacher, percentage, remark]);
-        }
-      });
-
-      const ws = XLSX.utils.aoa_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Results");
-      XLSX.writeFile(wb, "analysis_results.xlsx");
-    };
-
-    // Export to PDF
-    window.exportToPDF = function() {
-      const { jsPDF } = window.jspdf || {};
-      if (!jsPDF) {
-        alert("jsPDF library failed to load.");
-        return;
-      }
-
-      const doc = new jsPDF();
-
-      // Title
-      doc.setFontSize(14);
-      doc.text("Analysis Results", 14, 15);
-
-      // Batch Info
-      doc.setFontSize(11);
-      const details = [
-        ["Batch Code:", "{{ batch.batch_code }}"],
-        ["Phase:", "{{ phase }}"],
-        ["Total Students:", "{{ total_students }}"],
-        ["Total Responsive:", "{{ total_responsive }}"],
-        ["Date:", "{{ date }}"]
-      ];
-
-      let y = 25;
-      details.forEach(([label, value]) => {
-        doc.text(`${label} ${value}`, 14, y);
-        y += 7;
-      });
-
-      // Table
-      const tableData = [];
-      document.querySelectorAll("tbody tr").forEach(row => {
-        const cols = row.querySelectorAll("td");
-        if (cols.length) {
-          const subject = cols[0].innerText.trim();
-          const teacher = cols[1].innerText.trim();
-          const percentage = cols[2].innerText.trim();
-          const remarkInput = cols[3].querySelector("input");
-          const remark = remarkInput ? remarkInput.value : cols[3].innerText.trim();
-          tableData.push([subject, teacher, percentage, remark]);
-        }
-      });
-
-      doc.autoTable({
-        startY: y + 5,
-        head: [["Subject", "Teacher", "Percentage", "Teacher Remarks"]],
-        body: tableData,
-        theme: "grid",
-        styles: { fontSize: 10 }
-      });
-
-      doc.save("analysis_results.pdf");
     };
   </script>
 </body>
