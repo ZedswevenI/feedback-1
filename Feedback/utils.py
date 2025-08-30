@@ -3,6 +3,7 @@ import re
 import random
 import logging
 
+
 logger = logging.getLogger(__name__)
 
 def parse_omr_pdf(omr_sheet, subject_names, total_responsive):
