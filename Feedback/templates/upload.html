@@ -238,7 +238,7 @@
 
       // Validate OMR Sheet
       const omrFile = document.getElementById('omrFile').files[0];
-      if (!omrFile || !omrFile.name.endsWith('.pdf') || omrFile.size > 10 * 1024 * 1024) {
+      if (!omrFile || !omrFile.name.endsWith('.pdf') || omrFile.size > 100 * 1024 * 1024) {
         document.getElementById('omrFileError').style.display = 'block';
         isValid = false;
       } else {
