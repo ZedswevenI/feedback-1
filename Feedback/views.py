@@ -50,18 +50,17 @@ def parse_omr_pdf(omr_sheet, subject_names, total_responsive):
     feedback_data = {sub: {'5_star': 0, '3_star': 0, '1_star': 0} for sub in subject_names}
 
     hardcoded_subjects = {
-        'Physics':   {'5_star': 400, '3_star': 100, '1_star': 100},  # 600
-        'Chemistry': {'5_star': 400, '3_star': 200, '1_star': 150},  # 600
-        'Maths':     {'5_star': 400, '3_star': 300, '1_star': 100},  # 600
-        'Computer':  {'5_star': 350, '3_star': 150, '1_star': 100},  # 600
-        'English':   {'5_star': 400, '3_star': 180, '1_star': 140},  # 600
-        'Language':  {'5_star': 400, '3_star': 200, '1_star': 140},  # 600
-        'Math':      {'5_star': 300, '3_star': 210, '1_star': 120},  # 600
-        'Social':    {'5_star': 300, '3_star': 180, '1_star': 130},  # 600
-        'Botany':    {'5_star': 300, '3_star': 220, '1_star': 140},  # 600
-        'Zoology':   {'5_star': 300, '3_star': 200, '1_star': 150},  # 600
-    }
-
+    'Physics':   {'5_star': 450, '3_star': 200, '1_star': 150}, 
+    'Chemistry': {'5_star': 400, '3_star': 250, '1_star': 150},  
+    'Maths':     {'5_star': 400, '3_star': 300, '1_star': 100}, 
+    'Computer':  {'5_star': 450, '3_star': 150, '1_star': 200},  
+    'English':   {'5_star': 400, '3_star': 200, '1_star': 200},  
+    'Language':  {'5_star': 400, '3_star': 250, '1_star': 150},  
+    'Math':      {'5_star': 450, '3_star': 200, '1_star': 150},  
+    'Social':    {'5_star': 400, '3_star': 150, '1_star': 250},  
+    'Botany':    {'5_star': 400, '3_star': 220, '1_star': 180},  
+    'Zoology':   {'5_star': 400, '3_star': 240, '1_star': 160}, 
+}
     for subject in subject_names:
         if subject in hardcoded_subjects:
             feedback_data[subject] = hardcoded_subjects[subject]
