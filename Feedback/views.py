@@ -41,55 +41,6 @@ class FilterForm(forms.Form):
         self.fields['batch_codes'].queryset = Batch.objects.all()
 
 
-# ------------------ Parse OMR PDF ------------------
-def parse_omr_pdf(omr_sheet, subject_names, total_responsive):
-    """
-    Reads PDF and extracts feedback counts for each subject
-    across all forms inside the PDF. Uses some hardcoded subjects for testing.
-    """
-    feedback_data = {sub: {'5_star': 0, '3_star': 0, '1_star': 0} for sub in subject_names}
-
-    hardcoded_subjects = {
-    'Physics':   {'5_star': 450, '3_star': 200, '1_star': 150}, 
-    'Chemistry': {'5_star': 400, '3_star': 250, '1_star': 150},  
-    'Maths':     {'5_star': 400, '3_star': 300, '1_star': 100}, 
-    'Computer':  {'5_star': 450, '3_star': 150, '1_star': 200},  
-    'English':   {'5_star': 400, '3_star': 200, '1_star': 200},  
-    'Language':  {'5_star': 400, '3_star': 250, '1_star': 150},  
-    'Math':      {'5_star': 450, '3_star': 200, '1_star': 150},  
-    'Social':    {'5_star': 400, '3_star': 150, '1_star': 250},  
-    'Botany':    {'5_star': 400, '3_star': 220, '1_star': 180},  
-    'Zoology':   {'5_star': 400, '3_star': 240, '1_star': 160}, 
-}
-    for subject in subject_names:
-        if subject in hardcoded_subjects:
-            feedback_data[subject] = hardcoded_subjects[subject]
-            # logger.info(f"Hardcoded {subject} feedback: {feedback_data[subject]}")
-
-    pdf_reader = PyPDF2.PdfReader(omr_sheet)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text() or ""
-
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    logger.info(f"Extracted lines from PDF: {lines[:50]}...")
-
-    for idx, line in enumerate(lines):
-        for subject in subject_names:
-            if subject.lower() in line.lower() and subject not in hardcoded_subjects:
-                numbers = re.findall(r"\d+", line)
-                if len(numbers) < 3 and idx + 1 < len(lines):
-                    numbers += re.findall(r"\d+", lines[idx + 1])
-
-                if len(numbers) >= 3:
-                    feedback_data[subject]['5_star'] += int(numbers[0])
-                    feedback_data[subject]['3_star'] += int(numbers[1])
-                    feedback_data[subject]['1_star'] += int(numbers[2])
-                    logger.info(f"Accumulated {subject}: {feedback_data[subject]}")
-
-    logger.info(f"Final feedback totals: {feedback_data}")
-    return feedback_data
-
 
 # # ------------------ Upload ------------------
 def upload(request):
