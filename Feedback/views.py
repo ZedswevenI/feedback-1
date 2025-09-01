@@ -3,7 +3,7 @@ import re
 import json
 from django.http import JsonResponse
 import PyPDF2
-from .utils import parse_omr_pdf
+from .utils import parse_omr_pdf_with_subject_blocks
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.db.models import Q
@@ -12,6 +12,11 @@ from django import forms
 from .models import Batch, Subject, Teacher, Performance
 from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
+import os
+from pdf2image import convert_from_bytes
+import cv2
+import tempfile
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,82 +45,78 @@ class FilterForm(forms.Form):
         self.fields['teachers'].queryset = Teacher.objects.all()
         self.fields['batch_codes'].queryset = Batch.objects.all()
 
-
-
-# # ------------------ Upload ------------------
 def upload(request):
-    if request.method == 'POST':
-        batch_code = request.POST.get('batch_code')
-        phase = request.POST.get('phase')
-        total_students = request.POST.get('total_students')
-        total_responsive = request.POST.get('total_responsive')
-        omr_sheet = request.FILES.get('omr_sheet')
-        subject_names = request.POST.getlist('subject_name[]')
-        teacher_names = request.POST.getlist('teacher_name[]')
-        date_str = request.POST.get('date')   # ✅ Fetch date from form
+    if request.method == "POST":
+        logger.info("Received POST request for upload")
 
-        if not (batch_code and phase and total_students and total_responsive and omr_sheet and date_str):
+        batch_code = request.POST.get("batch_code")
+        phase = request.POST.get("phase")
+        total_students = request.POST.get("total_students")
+        total_responsive = int(request.POST.get("total_responsive", 0))
+        date = request.POST.get("date")
+
+        subject_names = request.POST.getlist("subject_name[]")
+        teacher_names = request.POST.getlist("teacher_name[]")
+        omr_file = request.FILES.get("omr_sheet")
+
+        if not omr_file:
+            messages.error(request, "No OMR file uploaded. Please select a PDF.")
+            return render(request, "upload.html")
+
+        if not batch_code or not phase or not total_students or not subject_names:
             messages.error(request, "All fields are required.")
-            return render(request, 'upload.html')
+            return render(request, "upload.html")
 
-        total_students = int(total_students)
-        total_responsive = int(total_responsive)
-        batch_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()  # ✅ Convert to date
-
-        # Save batch
+        # Create Batch up-front
         batch = Batch.objects.create(
             batch_code=batch_code,
             phase=phase,
             total_students=total_students,
             total_responsive=total_responsive,
-            date=batch_date   # ✅ Save date
+            date=date,
         )
 
-        # Parse OMR PDF
-        feedback_data = parse_omr_pdf(omr_sheet, subject_names, total_responsive)
-        logger.info(f"Final feedback totals: {feedback_data}")
+        # Parse PDF → counts
+        feedback = parse_omr_pdf_with_subject_blocks(omr_file, debug_dir="bubble_debug_images")
+        aggregated = feedback.get("aggregated", {})
+        per_form_results = feedback.get("per_form", [])
 
-        QUESTIONS_PER_SUBJECT = 20
-        MAX_MARKS_PER_QUESTION = 5
-        max_possible_score = total_responsive * QUESTIONS_PER_SUBJECT * MAX_MARKS_PER_QUESTION
-
+        # Save subjects (only for those the user listed)
         for subject_name, teacher_name in zip(subject_names, teacher_names):
-            teacher, _ = Teacher.objects.get_or_create(teacher_name=teacher_name)
+            counts = aggregated.get(
+                subject_name, {"5_star": 0, "3_star": 0, "1_star": 0}
+            )
+            five_star = int(counts.get("5_star", 0))
+            three_star = int(counts.get("3_star", 0))
+            one_star = int(counts.get("1_star", 0))
 
-            subject_feedback = feedback_data.get(subject_name, {'5_star': 0, '3_star': 0, '1_star': 0})
+            total_responses = five_star + three_star + one_star
+            if total_responses > 0:
+                score = five_star * 5 + three_star * 3 + one_star * 1
+                average_percentage = (score / (total_responses * 5.0)) * 100.0
+            else:
+                average_percentage = 0.0
 
-            weighted_score = (
-                (5 * subject_feedback['5_star']) +
-                (3 * subject_feedback['3_star']) +
-                (1 * subject_feedback['1_star'])
+            teacher_obj, _ = Teacher.objects.get_or_create(
+                teacher_name=teacher_name.strip()
             )
 
-            average_percentage = (weighted_score / max_possible_score) * 100 if max_possible_score else 0
-            average_percentage = min(100, round(average_percentage, 2))
-
-            subject = Subject.objects.create(
+            Subject.objects.create(
                 batch=batch,
-                subject_name=subject_name,
-                teacher=teacher,
-                five_star=subject_feedback['5_star'],
-                three_star=subject_feedback['3_star'],
-                one_star=subject_feedback['1_star'],
+                subject_name=subject_name.strip(),
+                teacher=teacher_obj,
+                five_star=five_star,
+                three_star=three_star,
+                one_star=one_star,
                 average_percentage=average_percentage,
-                teacher_remarks=""
             )
 
-            Performance.objects.create(
-                batch=batch,
-                teacher=teacher,
-                subject=subject,
-                average_percentage=average_percentage,
-                remarks=""
-            )
+        # Stash per-form results (optional use in template)
+        request.session["per_form_results"] = per_form_results
+        messages.success(request, "Feedback uploaded successfully!")
+        return redirect("results", batch_id=batch.id)
 
-        return redirect('results', batch_id=batch.id)
-
-    return render(request, 'upload.html')
-
+    return render(request, "upload.html")
 
 # ------------------ Results ------------------
 def results(request, batch_id):

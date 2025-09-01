@@ -1,62 +1,243 @@
-import PyPDF2
-import re
-import random
-import logging
+import os
+import cv2
+import numpy as np
+import tempfile
+from pdf2image import convert_from_bytes
 
-
-logger = logging.getLogger(__name__)
-
-def parse_omr_pdf(omr_sheet, subject_names, total_responsive):
+# ------------------ SUBJECT BLOCK PROCESSOR ------------------
+def process_subject_block(gray, w, subject, y_start, y_end, x_positions, stars, question_count=20):
     """
-    Reads PDF and extracts feedback counts for each subject
-    across all forms inside the PDF. Case-insensitive and key-based matching.
+    Process a subject block in the OMR sheet to count marked bubbles.
+    
+    Args:
+        gray: Grayscale image of the OMR page.
+        w: Width of the image.
+        subject: Subject name (e.g., Physics, Maths).
+        y_start, y_end: Y-coordinates for the subject block.
+        x_positions: X-coordinates for bubble columns.
+        stars: List of star ratings (e.g., ["5_star", "3_star", "1_star"]).
+        question_count: Number of questions per subject (default: 20).
+    
+    Returns:
+        results: Dictionary with counts for each star rating.
+        debug_img: Debug image with marked circles and labels.
     """
-    feedback_data = {sub: {'5_star': 0, '3_star': 0, '1_star': 0} for sub in subject_names}
+    results = {s: 0 for s in stars}
+    debug_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
-    hardcoded_subjects = {
-        'physics':   {'5_star': 450, '3_star': 200, '1_star': 150}, 
-        'chemistry': {'5_star': 400, '3_star': 250, '1_star': 150},  
-        'maths':     {'5_star': 400, '3_star': 300, '1_star': 100}, 
-        'computer science':  {'5_star': 450, '3_star': 150, '1_star': 200},  
-        'english':   {'5_star': 400, '3_star': 200, '1_star': 200},  
-        'language':  {'5_star': 400, '3_star': 250, '1_star': 150},  
-        'math':      {'5_star': 450, '3_star': 200, '1_star': 150},  
-        'social':    {'5_star': 400, '3_star': 150, '1_star': 250},  
-        'botany':    {'5_star': 400, '3_star': 220, '1_star': 180},  
-        'zoology':   {'5_star': 400, '3_star': 240, '1_star': 160}, 
+    # Ensure valid y-coordinates
+    y_start = max(0, y_start)
+    y_end = min(gray.shape[0], y_end)
+    block_gray = gray[y_start:y_end, :]
+    
+    if block_gray is None or block_gray.size == 0:
+        print(f"Warning: Empty block for {subject} (y_start={y_start}, y_end={y_end})")
+        return results, debug_img
+
+    block_h = block_gray.shape[0]
+    if block_h <= 0 or question_count <= 0:
+        print(f"Warning: Invalid block height ({block_h}) or question count ({question_count}) for {subject}")
+        return results, debug_img
+
+    # Calculate step size and window for bubble detection
+    step = max(1, block_h // question_count)
+    window = max(20, step // 2) if subject in ["Physics", "Maths", "Computer"] else max(15, step // 2)
+
+    # Apply adaptive thresholding and morphological operations
+    th = cv2.adaptiveThreshold(block_gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                               cv2.THRESH_BINARY_INV, 25, 5)
+    th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+
+    for idx in range(question_count):
+        y_q = int((idx + 0.5) * step)
+        if y_q - window < 0 or y_q + window >= block_h:
+            continue
+
+        detected_star = None
+        max_area = 0
+
+        for j, x in enumerate(x_positions):
+            x1, x2 = x - window, x + window
+            if x1 < 0 or x2 >= w:
+                continue
+
+            roi = th[y_q - window:y_q + window, x1:x2]
+            if roi is None or roi.size == 0:
+                continue
+
+            contours, _ = cv2.findContours(roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            area_thr = max(5, int(0.02 * (2 * window) * (2 * window)))
+
+            for c in contours:
+                a = cv2.contourArea(c)
+                if a > area_thr and a > max_area:
+                    max_area = a
+                    detected_star = j
+
+        if detected_star is not None:
+            results[stars[detected_star]] += 1
+            cx = x_positions[detected_star]
+            cy = y_start + y_q
+            cv2.circle(debug_img, (cx, cy), max(6, window // 2), (0, 0, 255), 2)
+            cv2.putText(debug_img, f"{subject[:3]}-{stars[detected_star][0]}",
+                        (cx + 8, cy - 4), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45, (0, 255, 0), 1, cv2.LINE_AA)
+
+    return results, debug_img
+
+# ------------------ PDF PARSER ------------------
+def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_images"):
+    """
+    Parse an OMR PDF to count marked bubbles for each subject and calculate pass/fail status.
+    
+    Args:
+        omr_pdf_file: Path to PDF file or file-like object.
+        debug_dir: Directory to save debug images.
+    
+    Returns:
+        Dictionary with aggregated counts, percentages, per-form results, and pass/fail status.
+    """
+    # Subject block y-coordinate fractions
+    subject_y_fracs = {
+        "Physics":   (0.12, 0.27),
+        "Chemistry": (0.28, 0.42),
+        "Maths":     (0.43, 0.58),
+        "English":   (0.59, 0.74),
+        "Computer":  (0.75, 0.94),
     }
 
-    # Assign hardcoded data if present
-    for subject in subject_names:
-        sub_key = subject.lower()
-        if sub_key in hardcoded_subjects:
-            feedback_data[subject] = hardcoded_subjects[sub_key]
+    # X-coordinates for bubble columns
+    subject_x_positions = {
+        "Physics":   [0.28, 0.45, 0.62],
+        "Chemistry": [0.27, 0.44, 0.61],
+        "Maths":     [0.28, 0.45, 0.62],
+        "English":   [0.28, 0.45, 0.62],
+        "Computer":  [0.26, 0.44, 0.605],
+    }
 
-    pdf_reader = PyPDF2.PdfReader(omr_sheet)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text() or ""
+    stars = ["5_star", "3_star", "1_star"]
 
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    logger.info(f"Extracted lines from PDF: {lines[:50]}...")
+    # Ensure debug_dir is a valid string path
+    if not isinstance(debug_dir, str):
+        debug_dir = "bubble_debug_images"
+    os.makedirs(debug_dir, exist_ok=True)
 
-    for idx, line in enumerate(lines):
-        line_lower = line.lower()
-        for subject in subject_names:
-            subject_lower = subject.lower()
-            # Accept exact match, case-insensitive substring, or abbreviation
-            if (subject_lower in line_lower or
-                any(word.startswith(subject_lower[:3]) for word in line_lower.split())) and subject_lower not in hardcoded_subjects:
-                
-                numbers = re.findall(r"\d+", line)
-                if len(numbers) < 3 and idx + 1 < len(lines):
-                    numbers += re.findall(r"\d+", lines[idx + 1])
+    # Read PDF file
+    try:
+        if isinstance(omr_pdf_file, str):
+            with open(omr_pdf_file, "rb") as f:
+                pdf_bytes = f.read()
+        else:
+            pdf_bytes = omr_pdf_file.read()
+    except Exception as e:
+        print(f"Error reading PDF file: {e}")
+        return {}
 
-                if len(numbers) >= 3:
-                    feedback_data[subject]['5_star'] += int(numbers[0])
-                    feedback_data[subject]['3_star'] += int(numbers[1])
-                    feedback_data[subject]['1_star'] += int(numbers[2])
-                    logger.info(f"Accumulated {subject}: {feedback_data[subject]}")
+    # Convert PDF to images
+    try:
+        images = convert_from_bytes(pdf_bytes)
+    except Exception as e:
+        print(f"Error converting PDF to images: {e}")
+        return {}
 
-    logger.info(f"Final feedback totals: {feedback_data}")
-    return feedback_data
+    aggregated = {sub: {s: 0 for s in stars} for sub in subject_y_fracs}
+    per_form, form_counter = [], 0
+
+    for page_idx, pil_img in enumerate(images, start=1):
+        # Save PIL image to temporary file
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            try:
+                pil_img.save(tmp.name, "PNG")
+                tmp_path = tmp.name
+            except Exception as e:
+                print(f"Error saving temporary image for page {page_idx}: {e}")
+                continue
+
+        # Read image in grayscale
+        page_gray = cv2.imread(tmp_path, cv2.IMREAD_GRAYSCALE)
+        if page_gray is None or page_gray.size == 0:
+            print(f"Warning: Could not read image for page {page_idx}")
+            os.remove(tmp_path)
+            continue
+
+        h, w = page_gray.shape[:2]
+        form_counts = {}
+        debug_img = cv2.cvtColor(page_gray, cv2.COLOR_GRAY2BGR)
+
+        # Process each subject block
+        for subject, (f_start, f_end) in subject_y_fracs.items():
+            y_start = int(h * f_start)
+            y_end = int(h * f_end)
+            x_positions = [int(w * xp) for xp in subject_x_positions[subject]]
+            counts, dbg = process_subject_block(page_gray, w, subject, y_start, y_end, x_positions, stars, question_count=20)
+            form_counts[subject] = counts
+            for s in stars:
+                aggregated[subject][s] += counts[s]
+            debug_img = cv2.addWeighted(debug_img, 0.7, dbg, 0.3, 0)
+
+        # Calculate percentages and pass/fail status
+        percentages = {}
+        pass_fail = {}
+        for sub, cnts in form_counts.items():
+            total_marked = sum(cnts.values())
+            percentages[sub] = {s: round((cnts[s] / total_marked * 100), 2) if total_marked else 0 for s in stars}
+            # Pass if at least 80% of questions (16/20) are marked
+            pass_fail[sub] = "Pass" if total_marked >= 16 else "Fail"
+
+        form_counter += 1
+        per_form.append({
+            "form_number": form_counter,
+            "star_counts": form_counts,
+            "percentages": percentages,
+            "pass_fail": pass_fail
+        })
+
+        # Save debug image
+        debug_path = os.path.join(debug_dir, f"page{page_idx}_form{form_counter}.png")
+        cv2.imwrite(debug_path, debug_img)
+        os.remove(tmp_path)
+
+    # Calculate aggregated percentages and pass/fail
+    aggregated_percentages = {}
+    aggregated_pass_fail = {}
+    for sub, counts in aggregated.items():
+        total = sum(counts.values())
+        aggregated_percentages[sub] = {s: round((counts[s] / total * 100), 2) if total else 0 for s in stars}
+        # For Physics, Maths, Computer: Pass only if >= 80% questions marked across all forms
+        if sub in ["Physics", "Maths", "Computer"]:
+            aggregated_pass_fail[sub] = "Pass" if total >= 16 * form_counter else "Fail"
+        else:
+            aggregated_pass_fail[sub] = "Pass" if total >= 16 * form_counter else "Fail"
+
+    return {
+        "aggregated": aggregated,
+        "percentages": aggregated_percentages,
+        "per_form": per_form,
+        "aggregated_pass_fail": aggregated_pass_fail
+    }
+
+# ------------------ USAGE ------------------
+if __name__ == "__main__":
+    omr_file = "sample_omr.pdf"  # Replace with your PDF path
+    results = parse_omr_pdf_with_subject_blocks(omr_file)
+    
+    # Print results
+    print("\n=== OMR Processing Results ===")
+    print("\nAggregated Counts:")
+    for sub, counts in results.get("aggregated", {}).items():
+        print(f"{sub}: {counts}")
+    
+    print("\nAggregated Percentages:")
+    for sub, perc in results.get("percentages", {}).items():
+        print(f"{sub}: {perc}")
+    
+    print("\nAggregated Pass/Fail:")
+    for sub, status in results.get("aggregated_pass_fail", {}).items():
+        print(f"{sub}: {status}")
+    
+    print("\nPer Form Results:")
+    for form in results.get("per_form", []):
+        print(f"\nForm {form['form_number']}:")
+        print("Star Counts:", form["star_counts"])
+        print("Percentages:", form["percentages"])
+        print("Pass/Fail:", form["pass_fail"])
