@@ -2,7 +2,6 @@ import logging
 import re
 import json
 from django.http import JsonResponse
-import PyPDF2
 from .utils import parse_omr_pdf_with_subject_blocks
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -12,10 +11,7 @@ from django import forms
 from .models import Batch, Subject, Teacher, Performance
 from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
-import os
-from pdf2image import convert_from_bytes
-import cv2
-import tempfile
+
 
 
 logger = logging.getLogger(__name__)
