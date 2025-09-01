@@ -181,8 +181,11 @@ def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_imag
         for sub, cnts in form_counts.items():
             total_marked = sum(cnts.values())
             percentages[sub] = {s: round((cnts[s] / total_marked * 100), 2) if total_marked else 0 for s in stars}
-            # Pass if at least 80% of questions (16/20) are marked
-            pass_fail[sub] = "Pass" if total_marked >= 16 else "Fail"
+            # Pass if at least 80% of questions (16/20) are marked for Physics, Maths, Computer
+            if sub in ["Physics", "Maths", "Computer"]:
+                pass_fail[sub] = "Pass" if total_marked >= 16 else f"Fail (only {total_marked}/20 marked)"
+            else:
+                pass_fail[sub] = "Pass" if total_marked >= 16 else "Fail"
 
         form_counter += 1
         per_form.append({
@@ -202,10 +205,15 @@ def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_imag
     aggregated_pass_fail = {}
     for sub, counts in aggregated.items():
         total = sum(counts.values())
-        aggregated_percentages[sub] = {s: round((counts[s] / total * 100), 2) if total else 0 for s in stars}
-        # For Physics, Maths, Computer: Pass only if >= 80% questions marked across all forms
+        total_questions = 20 * form_counter
+        marked_percentage = round((total / total_questions * 100), 2) if total_questions else 0
+        aggregated_percentages[sub] = {
+            "star_percentages": {s: round((counts[s] / total * 100), 2) if total else 0 for s in stars},
+            "total_marked_percentage": marked_percentage
+        }
+        # For Physics, Maths, Computer: Pass only if >= 80% questions marked
         if sub in ["Physics", "Maths", "Computer"]:
-            aggregated_pass_fail[sub] = "Pass" if total >= 16 * form_counter else "Fail"
+            aggregated_pass_fail[sub] = "Pass" if total >= 16 * form_counter else f"Fail (only {total}/{total_questions} marked, {marked_percentage}%)"
         else:
             aggregated_pass_fail[sub] = "Pass" if total >= 16 * form_counter else "Fail"
 
@@ -216,28 +224,3 @@ def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_imag
         "aggregated_pass_fail": aggregated_pass_fail
     }
 
-# ------------------ USAGE ------------------
-if __name__ == "__main__":
-    omr_file = "sample_omr.pdf"  # Replace with your PDF path
-    results = parse_omr_pdf_with_subject_blocks(omr_file)
-    
-    # Print results
-    print("\n=== OMR Processing Results ===")
-    print("\nAggregated Counts:")
-    for sub, counts in results.get("aggregated", {}).items():
-        print(f"{sub}: {counts}")
-    
-    print("\nAggregated Percentages:")
-    for sub, perc in results.get("percentages", {}).items():
-        print(f"{sub}: {perc}")
-    
-    print("\nAggregated Pass/Fail:")
-    for sub, status in results.get("aggregated_pass_fail", {}).items():
-        print(f"{sub}: {status}")
-    
-    print("\nPer Form Results:")
-    for form in results.get("per_form", []):
-        print(f"\nForm {form['form_number']}:")
-        print("Star Counts:", form["star_counts"])
-        print("Percentages:", form["percentages"])
-        print("Pass/Fail:", form["pass_fail"])
