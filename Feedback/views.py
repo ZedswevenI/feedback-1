@@ -11,7 +11,8 @@ from django import forms
 from .models import Batch, Subject, Teacher, Performance
 from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
-from Feedback import utils
+
+
 
 
 logger = logging.getLogger(__name__)
@@ -178,59 +179,66 @@ def save_remarks(request, batch_id):
 # ------------------ Report ------------------
 def report(request):
     try:
-        performances = Performance.objects.all().order_by('-created_at')
+        performances = Performance.objects.all().select_related(
+            "batch", "subject", "subject__teacher"
+        ).order_by('-created_at')
 
-        # Fetch filters from GET
+        # --- Fetch filters from GET ---
         keyword = request.GET.get("keyword", "").strip()
         mode = request.GET.get("mode", "")
         teacher_id = request.GET.get("teacher", "")
-        teachers_ids = request.GET.getlist("teachers")
-        batch_ids = request.GET.getlist("batch_codes")
+        teachers_ids = request.GET.getlist("teachers")  # multiple
+        batch_ids = request.GET.getlist("batch_codes")  # multiple
         from_date = request.GET.get("from_date", "")
         to_date = request.GET.get("to_date", "")
 
-        # Date range filter
+        # --- Date range filter ---
         if from_date:
-            performances = performances.filter(
-                created_at__gte=timezone.make_aware(
-                    timezone.datetime.combine(
-                        timezone.datetime.fromisoformat(from_date).date(),
-                        timezone.datetime.min.time()
+            try:
+                from_date_obj = timezone.datetime.fromisoformat(from_date).date()
+                performances = performances.filter(
+                    created_at__gte=timezone.make_aware(
+                        timezone.datetime.combine(from_date_obj, timezone.datetime.min.time())
                     )
                 )
-            )
-        if to_date:
-            performances = performances.filter(
-                created_at__lte=timezone.make_aware(
-                    timezone.datetime.combine(
-                        timezone.datetime.fromisoformat(to_date).date(),
-                        timezone.datetime.max.time()
-                    )
-                )
-            )
+            except Exception as e:
+                logger.warning(f"Invalid from_date: {from_date} | {e}")
 
-        # Keyword filter
+        if to_date:
+            try:
+                to_date_obj = timezone.datetime.fromisoformat(to_date).date()
+                performances = performances.filter(
+                    created_at__lte=timezone.make_aware(
+                        timezone.datetime.combine(to_date_obj, timezone.datetime.max.time())
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Invalid to_date: {to_date} | {e}")
+
+        # --- Keyword filter ---
         if keyword:
-            keywords = [k.strip() for k in keyword.split(",")]
+            keywords = [k.strip() for k in keyword.split(",") if k.strip()]
             keyword_query = Q()
             for k in keywords:
-                if k:
-                    keyword_query |= (
-                        Q(remarks__icontains=k) |
-                        Q(teacher__teacher_name__icontains=k) |
-                        Q(batch__batch_code__icontains=k)
-                    )
+                keyword_query |= (
+                    Q(remarks__icontains=k) |
+                    Q(subject__teacher__teacher_name__icontains=k) |
+                    Q(batch__batch_code__icontains=k) |
+                    Q(subject__subject_name__icontains=k)
+                )
             performances = performances.filter(keyword_query)
 
-        # Mode filters
+        # --- Mode filters ---
         if mode == "individual" and teacher_id:
-            performances = performances.filter(teacher_id=teacher_id)
+            performances = performances.filter(subject__teacher_id=teacher_id)
+
         elif mode == "multiple" and teachers_ids:
-            performances = performances.filter(teacher_id__in=teachers_ids)
+            performances = performances.filter(subject__teacher_id__in=teachers_ids)
+
         elif mode == "batch" and batch_ids:
             performances = performances.filter(batch_id__in=batch_ids)
 
-        # Fetch teachers and batches for dropdowns
+        # --- Fetch teachers and batches for dropdowns ---
         teachers = Teacher.objects.all().order_by("teacher_name")
         batches = Batch.objects.all().order_by("batch_code")
 
@@ -238,7 +246,6 @@ def report(request):
             "performances": performances,
             "teachers": teachers,
             "batches": batches,
-            "request": request,  # for GET values in template
         }
         return render(request, "report.html", context)
 
