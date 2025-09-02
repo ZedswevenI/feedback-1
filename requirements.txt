@@ -6,5 +6,4 @@ imutils
 pillow
 PyPDF2
 gunicorn
-uvicorn
-tempfile
+uvicor
