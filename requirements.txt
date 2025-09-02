@@ -7,4 +7,3 @@ pillow
 PyPDF2
 gunicorn
 uvicorn
-cv2
