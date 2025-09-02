@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduFeedback Analytics - Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+  <!-- Navbar -->
+  <nav class="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md">
+    <h1 class="text-xl font-bold">EduFeedback Analytics</h1>
+    <a href="{% url 'upload' %}" 
+       class="bg-white text-blue-600 hover:bg-gray-100 font-semibold py-2 px-4 rounded-lg shadow-sm transition">
+       Back to Upload
+    </a>
+  </nav>
+
+  <!-- Page Title -->
+  <div class="max-w-7xl mx-auto mt-6 px-4">
+    <h2 class="text-2xl font-bold text-gray-700">Report Dashboard</h2>
+    <p class="text-gray-500">Filter and analyze teacher performance reports</p>
+  </div>
+
+  <!-- Report Filters -->
+  <div class="max-w-7xl mx-auto mt-6 bg-white p-6 rounded-2xl shadow-md">
+    <form id="reportForm" method="get" 
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+
+      <!-- Search -->
+      <div class="flex flex-col">
+        <label for="keyword" class="text-sm font-medium text-gray-600 mb-1">Search</label>
+        <input type="text" id="keyword" name="keyword" placeholder="Search..."
+          value="{{ request.GET.keyword }}"
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+
+      <!-- Mode -->
+      <div class="flex flex-col">
+        <label for="mode" class="text-sm font-medium text-gray-600 mb-1">Mode</label>
+        <select id="mode" name="mode" onchange="updateFields()" 
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option value="">Select Mode</option>
+          <option value="individual" {% if request.GET.mode == 'individual' %}selected{% endif %}>Individual Teacher</option>
+          <option value="multiple" {% if request.GET.mode == 'multiple' %}selected{% endif %}>Multiple Teachers</option>
+          <option value="batch" {% if request.GET.mode == 'batch' %}selected{% endif %}>Batch Code</option>
+        </select>
+      </div>
+
+      <!-- Individual Teacher -->
+      <div class="flex flex-col" id="teacher_field" style="display: {% if request.GET.mode == 'individual' %}block{% else %}none{% endif %}">
+        <label for="teacher" class="text-sm font-medium text-gray-600 mb-1">Teacher</label>
+        <select id="teacher" name="teacher" 
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option value="">Select Teacher</option>
+          {% for teacher in teachers %}
+            <option value="{{ teacher.id }}" {% if request.GET.teacher == teacher.id|stringformat:"s" %}selected{% endif %}>
+              {{ teacher.teacher_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Multiple Teachers -->
+      <div class="flex flex-col" id="teachers_field" style="display: {% if request.GET.mode == 'multiple' %}block{% else %}none{% endif %}">
+        <label for="teachers" class="text-sm font-medium text-gray-600 mb-1">Teachers</label>
+        <select id="teachers" name="teachers" multiple 
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          {% for teacher in teachers %}
+            <option value="{{ teacher.id }}" 
+              {% if teacher.id|stringformat:"s" in request.GET.teachers %}selected{% endif %}>
+              {{ teacher.teacher_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Batch Codes -->
+      <div class="flex flex-col" id="batch_codes_field" style="display: {% if request.GET.mode == 'batch' %}block{% else %}none{% endif %}">
+        <label for="batch_codes" class="text-sm font-medium text-gray-600 mb-1">Batch Codes</label>
+        <select id="batch_codes" name="batch_codes" multiple 
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          {% for batch in batches %}
+            <option value="{{ batch.id }}" 
+              {% if batch.id|stringformat:"s" in request.GET.batch_codes %}selected{% endif %}>
+              {{ batch.batch_code }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- From Date -->
+      <div class="flex flex-col">
+        <label for="from_date" class="text-sm font-medium text-gray-600 mb-1">From Date</label>
+        <input type="date" id="from_date" name="from_date" value="{{ request.GET.from_date }}" 
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+
+      <!-- To Date -->
+      <div class="flex flex-col">
+        <label for="to_date" class="text-sm font-medium text-gray-600 mb-1">To Date</label>
+        <input type="date" id="to_date" name="to_date" value="{{ request.GET.to_date }}" 
+          class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex gap-2 col-span-1 lg:col-span-2 items-end">
+        <button type="submit" 
+          class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg shadow transition">
+          Search
+        </button>
+        <button type="button" onclick="window.location.href='{% url 'report' %}'"
+          class="flex-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg shadow transition">
+          Reset
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Report Table -->
+  <div class="max-w-7xl mx-auto mt-6 bg-white p-6 rounded-2xl shadow-md overflow-x-auto">
+    <table class="table-auto w-full border-collapse">
+      <thead>
+        <tr class="bg-blue-50 text-left text-sm font-semibold">
+          <th class="p-3 border">Date</th>
+          <th class="p-3 border">Batch Code</th>
+          <th class="p-3 border">Teacher Name</th>
+          <th class="p-3 border">Subject</th>
+          <th class="p-3 border">Percentage</th>
+          <th class="p-3 border">Remarks</th>
+        </tr>
+      </thead>
+      <tbody class="text-sm">
+        {% for perf in performances %}
+        <tr class="hover:bg-gray-50 transition">
+          <td class="p-3 border">{{ perf.created_at|date:"Y-m-d" }}</td>
+          <td class="p-3 border">{{ perf.batch.batch_code }}</td>
+          <td class="p-3 border">{{ perf.subject.teacher.teacher_name }}</td>
+          <td class="p-3 border">{{ perf.subject.subject_name }}</td>
+          <td class="p-3 border">
+            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+              <div class="h-4 rounded-full text-xs text-white text-center font-medium"
+                style="width: {{ perf.average_percentage|default:'0' }}%; background-color: {% if perf.average_percentage is not None %}{% if perf.average_percentage >= 80 %}#22c55e{% elif perf.average_percentage >= 60 %}#facc15{% else %}#ef4444{% endif %}{% else %}#cccccc{% endif %};">
+                {{ perf.average_percentage|default:'0' }}%
+              </div>
+            </div>
+          </td>
+          <td class="p-3 border">{{ perf.remarks }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center p-4 text-gray-500">No records found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function updateFields() {
+      var mode = document.querySelector('select[name="mode"]').value;
+      document.getElementById('teacher_field').style.display = mode === 'individual' ? 'block' : 'none';
+      document.getElementById('teachers_field').style.display = mode === 'multiple' ? 'block' : 'none';
+      document.getElementById('batch_codes_field').style.display = mode === 'batch' ? 'block' : 'none';
+    }
+    updateFields();
+  </script>
+</body>
+</html>
