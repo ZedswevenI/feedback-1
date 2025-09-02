@@ -52,7 +52,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'feedback',  # Custom app for feedback
+    'Feedback',  # Custom app for feedback
 ]
 
 MIDDLEWARE = [
@@ -88,6 +88,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'feed.wsgi.application'
+ASGI_APPLICATION = 'feed.asgi.application'
+
 
 
 # Database
