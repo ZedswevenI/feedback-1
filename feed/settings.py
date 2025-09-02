@@ -40,7 +40,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://feedback.z7fb.in",
     "http://feedback.z7fb.in",
     "https://www.feedback.z7fb.in",
-    "http://www.feedback.z7fb.in",
+    "http://www.feedback.z7fb.in",  
 ]
 
 
