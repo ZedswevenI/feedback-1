@@ -35,6 +35,7 @@ ALLOWED_HOSTS = [
     "feedback.z7fb.in",  
     "Z7fb.up.railway.app",  
 ]
+
 CSRF_TRUSTED_ORIGINS = [
     "https://feedback.z7fb.in",
     "http://feedback.z7fb.in",
