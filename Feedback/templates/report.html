@@ -117,10 +117,8 @@
           class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg shadow transition">
           Search
         </button>
-        <button type="button" onclick="window.location.href='{% url 'report' %}'"
-          class="flex-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg shadow transition">
-          Reset
-        </button>
+        <a href="{% url 'report' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Reset</a>
+
       </div>
     </form>
   </div>

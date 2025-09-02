@@ -42,6 +42,10 @@ class FilterForm(forms.Form):
         self.fields['teachers'].queryset = Teacher.objects.all()
         self.fields['batch_codes'].queryset = Batch.objects.all()
 
+
+
+
+# ------------------ Upload ------------------
 def upload(request):
     if request.method == "POST":
         logger.info("Received POST request for upload")
@@ -78,7 +82,7 @@ def upload(request):
         aggregated = feedback.get("aggregated", {})
         per_form_results = feedback.get("per_form", [])
 
-        # Save subjects (only for those the user listed)
+        # Save subjects + performances
         for subject_name, teacher_name in zip(subject_names, teacher_names):
             counts = aggregated.get(
                 subject_name, {"5_star": 0, "3_star": 0, "1_star": 0}
@@ -98,7 +102,7 @@ def upload(request):
                 teacher_name=teacher_name.strip()
             )
 
-            Subject.objects.create(
+            subject_obj = Subject.objects.create(
                 batch=batch,
                 subject_name=subject_name.strip(),
                 teacher=teacher_obj,
@@ -108,12 +112,22 @@ def upload(request):
                 average_percentage=average_percentage,
             )
 
+            # ✅ FIX: Add teacher to Performance
+            Performance.objects.create(
+                batch=batch,
+                subject=subject_obj,
+                teacher=teacher_obj,  # <-- added this
+                remarks="",  # empty by default
+                average_percentage=average_percentage,
+            )
+
         # Stash per-form results (optional use in template)
         request.session["per_form_results"] = per_form_results
         messages.success(request, "Feedback uploaded successfully!")
         return redirect("results", batch_id=batch.id)
 
     return render(request, "upload.html")
+
 
 # ------------------ Results ------------------
 def results(request, batch_id):
@@ -126,16 +140,14 @@ def results(request, batch_id):
             "phase": batch.phase,
             "total_students": batch.total_students,
             "total_responsive": batch.total_responsive,
-            "date": batch.date,   # ✅ Pass date to template
+            "date": batch.date,
         })
     except Batch.DoesNotExist:
         logger.error(f"Batch with ID {batch_id} not found")
         return JsonResponse({"status": "error", "message": "Batch not found"}, status=404)
     except Exception as e:
-        logger.error(f"Error in results view for batch_id {batch_id}: {str(e)}")
+        logger.error(f"Error in results view for batch_id {batch_id}: {str(e)}", exc_info=True)
         return JsonResponse({"status": "error", "message": "Internal server error"}, status=500)
-
-
 # ------------------ Save Remarks ------------------
 @csrf_protect
 def save_remarks(request, batch_id):
@@ -176,7 +188,6 @@ def save_remarks(request, batch_id):
         return JsonResponse({"status": "error", "message": f"Internal server error: {str(e)}"}, status=500)
 
 
-# ------------------ Report ------------------
 def report(request):
     try:
         performances = Performance.objects.all().select_related(

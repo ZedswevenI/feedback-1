@@ -144,55 +144,35 @@
     </div>
   </main>
 
-  <script>
-    // ✅ Get CSRF token from cookie
-    function getCsrfToken() {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== "") {
-        const cookies = document.cookie.split(";");
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i].trim();
-          if (cookie.startsWith("csrftoken=")) {
-            cookieValue = cookie.substring("csrftoken=".length);
-            break;
-          }
-        }
-      }
-      return cookieValue;
-    }
+<script>
+  // ✅ Export table to Excel
+  function exportToExcel() {
+    const table = document.querySelector("table"); 
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.table_to_sheet(table);
+    XLSX.utils.book_append_sheet(wb, ws, "Results");
+    XLSX.writeFile(wb, "results.xlsx");
+  }
 
-    // ✅ Save Remarks (AJAX with CSRF token)
-    window.saveRemarks = function() {
-      const remarksData = {};
-      document.querySelectorAll("tbody tr").forEach(row => {
-        const subjectId = row.getAttribute("data-subject-id");
-        const remarkInput = row.querySelector("input[name^='remarks_']");
-        if (subjectId && remarkInput) {
-          remarksData[subjectId] = remarkInput.value.trim();
-        }
-      });
+  // ✅ Export table to PDF
+  function exportToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
 
-      fetch("{% url 'save_remarks' batch_id=batch.id %}", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCsrfToken()
-        },
-        body: JSON.stringify(remarksData)
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "success") {
-          alert("Remarks saved successfully!");
-        } else {
-          alert("Error: " + data.message);
-        }
-      })
-      .catch(err => {
-        console.error("Error:", err);
-        alert("An error occurred while saving remarks.");
-      });
-    };
-  </script>
+    doc.text("EduFeedback Results", 14, 16);
+    
+    // Use autoTable to export HTML table
+    doc.autoTable({
+      html: "table",   // pass table directly
+      startY: 25,
+      theme: "grid",
+      headStyles: { fillColor: [41, 128, 185] },
+      styles: { fontSize: 10 }
+    });
+
+    doc.save("results.pdf");
+  }
+</script>
+
 </body>
 </html>
