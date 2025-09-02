@@ -6,4 +6,4 @@ imutils
 pillow
 PyPDF2
 gunicorn
-uvicor
+uvicorn
