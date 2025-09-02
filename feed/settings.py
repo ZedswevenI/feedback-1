@@ -52,7 +52,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'Feedback',  # Custom app for feedback
+    'feedback',  # Custom app for feedback
 ]
 
 MIDDLEWARE = [
