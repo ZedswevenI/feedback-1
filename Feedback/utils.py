@@ -211,7 +211,7 @@ def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_imag
             "star_percentages": {s: round((counts[s] / total * 100), 2) if total else 0 for s in stars},
             "total_marked_percentage": marked_percentage
         }
-        # For Physics, Maths, Computer: Pass only if >= 80% questions marked
+        # For Physics, Maths, Computer: Pass only if >= 80% questions marked across all forms
         if sub in ["Physics", "Maths", "Computer"]:
             aggregated_pass_fail[sub] = "Pass" if total >= 16 * form_counter else f"Fail (only {total}/{total_questions} marked, {marked_percentage}%)"
         else:
@@ -223,5 +223,38 @@ def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_imag
         "per_form": per_form,
         "aggregated_pass_fail": aggregated_pass_fail
     }
-    
 
+# ------------------ USAGE ------------------
+if __name__ == "__main__":
+    omr_file = "sample_omr.pdf"  # Replace with your PDF path
+    results = parse_omr_pdf_with_subject_blocks(omr_file)
+    
+    # Print results
+    print("\n=== OMR Processing Results ===")
+    print("\nAggregated Counts (Total Marked Bubbles):")
+    for sub, counts in results.get("aggregated", {}).items():
+        print(f"{sub}: {counts} (Total: {sum(counts.values())}/20 per form)")
+
+    print("\nAggregated Percentages and Pass/Fail:")
+    for sub in ["Physics", "Maths", "Computer", "Chemistry", "English"]:
+        perc = results.get("percentages", {}).get(sub, {})
+        status = results.get("aggregated_pass_fail", {}).get(sub, "N/A")
+        total_perc = perc.get("total_marked_percentage", 0)
+        star_percs = perc.get("star_percentages", {})
+        print(f"\n{sub}:")
+        print(f"  Total Marked Percentage: {total_perc}%")
+        print(f"  Star Percentages: {star_percs}")
+        print(f"  Status: {status}")
+
+    print("\nPer Form Results:")
+    for form in results.get("per_form", []):
+        print(f"\nForm {form['form_number']}:")
+        for sub in ["Physics", "Maths", "Computer"]:
+            counts = form["star_counts"].get(sub, {})
+            total_marked = sum(counts.values())
+            perc = form["percentages"].get(sub, {})
+            status = form["pass_fail"].get(sub, "N/A")
+            print(f"  {sub}:")
+            print(f"    Star Counts: {counts} (Total: {total_marked}/20)")
+            print(f"    Star Percentages: {perc}")
+            print(f"    Status: {status}")
