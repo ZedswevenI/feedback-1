@@ -1,5 +1,4 @@
 from django.db import models
-from Feedback.models  
 
 class Batch(models.Model):
     batch_code = models.CharField(max_length=50)

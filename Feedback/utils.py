@@ -223,7 +223,5 @@ def parse_omr_pdf_with_subject_blocks(omr_pdf_file, debug_dir="bubble_debug_imag
         "per_form": per_form,
         "aggregated_pass_fail": aggregated_pass_fail
     }
-
-
-
+    
 
