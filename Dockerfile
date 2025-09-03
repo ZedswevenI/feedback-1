@@ -14,5 +14,5 @@ COPY . .
 RUN pip install --break-system-packages -r requirements.txt
 
 EXPOSE 8000
-CMD ["uvicorn", "feed.wsgi:application", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "feed.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
 
