@@ -1,22 +1,21 @@
-FROM ubuntu:latest
+FROM python:3.10-slim
 
-# Install Python and dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3 python3-pip python3-venv \
     libgl1 libglib2.0-0 poppler-utils \
-    libgl1 libglib2.0-0  fitz\
-
-
-    
     && rm -rf /var/lib/apt/lists/*
 
-# Copy your project
+# Set working directory
 WORKDIR /app
+
+# Copy project files
 COPY . .
 
-# Install requirements
-RUN pip install --break-system-packages -r requirements.txt
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Expose port
 EXPOSE 8000
-CMD ["uvicorn", "feed.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
 
+# Run the app
+CMD ["uvicorn", "feed.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
