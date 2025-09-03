@@ -1,8 +1,10 @@
 import logging
 import re
 import json
+import tempfile  
+import os
 from django.http import JsonResponse
-from .utils import parse_omr_pdf_with_subject_blocks
+from .utils import parse_omr   # ✅ updated import
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.db.models import Q
@@ -11,7 +13,6 @@ from django import forms
 from .models import Batch, Subject, Teacher, Performance
 from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
-
 
 
 
@@ -46,6 +47,8 @@ class FilterForm(forms.Form):
 
 
 # ------------------ Upload ------------------
+
+
 def upload(request):
     if request.method == "POST":
         logger.info("Received POST request for upload")
@@ -68,7 +71,7 @@ def upload(request):
             messages.error(request, "All fields are required.")
             return render(request, "upload.html")
 
-        # Create Batch up-front
+        # Create Batch entry
         batch = Batch.objects.create(
             batch_code=batch_code,
             phase=phase,
@@ -77,57 +80,73 @@ def upload(request):
             date=date,
         )
 
-        # Parse PDF → counts
-        feedback = parse_omr_pdf_with_subject_blocks(omr_file, debug_dir="bubble_debug_images")
-        aggregated = feedback.get("aggregated", {})
-        per_form_results = feedback.get("per_form", [])
+        tmp_path = None
+        try:
+            # Save uploaded PDF temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                for chunk in omr_file.chunks():
+                    tmp_file.write(chunk)
+                tmp_path = tmp_file.name
 
-        # Save subjects + performances
-        for subject_name, teacher_name in zip(subject_names, teacher_names):
-            counts = aggregated.get(
-                subject_name, {"5_star": 0, "3_star": 0, "1_star": 0}
-            )
-            five_star = int(counts.get("5_star", 0))
-            three_star = int(counts.get("3_star", 0))
-            one_star = int(counts.get("1_star", 0))
-
-            total_responses = five_star + three_star + one_star
-            if total_responses > 0:
-                score = five_star * 5 + three_star * 3 + one_star * 1
-                average_percentage = (score / (total_responses * 5.0)) * 100.0
-            else:
-                average_percentage = 0.0
-
-            teacher_obj, _ = Teacher.objects.get_or_create(
-                teacher_name=teacher_name.strip()
+            # Parse OMR
+            per_form_data, aggregated_results, percentage_results = parse_omr(
+                tmp_path, debug_dir="bubble_debug_images"
             )
 
-            subject_obj = Subject.objects.create(
-                batch=batch,
-                subject_name=subject_name.strip(),
-                teacher=teacher_obj,
-                five_star=five_star,
-                three_star=three_star,
-                one_star=one_star,
-                average_percentage=average_percentage,
-            )
+            # Save subjects and performances
+            subjects_objs = []
+            for subject_name, teacher_name in zip(subject_names, teacher_names):
+                counts = aggregated_results.get(subject_name, {"5_star": 0, "3_star": 0, "1_star": 0})
+                five_star = int(counts.get("5_star", 0))
+                three_star = int(counts.get("3_star", 0))
+                one_star = int(counts.get("1_star", 0))
 
-            # ✅ FIX: Add teacher to Performance
-            Performance.objects.create(
-                batch=batch,
-                subject=subject_obj,
-                teacher=teacher_obj,  # <-- added this
-                remarks="",  # empty by default
-                average_percentage=average_percentage,
-            )
+                total_responses = five_star + three_star + one_star
+                if total_responses > 0:
+                    score = five_star * 5 + three_star * 3 + one_star * 1
+                    average_percentage = (score / (total_responses * 5.0)) * 100.0
+                else:
+                    average_percentage = 0.0
 
-        # Stash per-form results (optional use in template)
-        request.session["per_form_results"] = per_form_results
-        messages.success(request, "Feedback uploaded successfully!")
-        return redirect("results", batch_id=batch.id)
+                # ✅ Format percentage to 2 decimals with trailing zero
+                average_percentage = float(f"{average_percentage:.2f}")
+
+                teacher_obj, _ = Teacher.objects.get_or_create(teacher_name=teacher_name.strip())
+
+                subject_obj = Subject.objects.create(
+                    batch=batch,
+                    subject_name=subject_name.strip(),
+                    teacher=teacher_obj,
+                    five_star=five_star,
+                    three_star=three_star,
+                    one_star=one_star,
+                    average_percentage=average_percentage,
+                )
+
+                Performance.objects.create(
+                    batch=batch,
+                    subject=subject_obj,
+                    teacher=teacher_obj,
+                    remarks="",
+                    average_percentage=average_percentage,
+                )
+
+                subjects_objs.append(subject_obj)
+
+            # Save per-form results in session
+            request.session["per_form_results"] = per_form_data
+            messages.success(request, "Feedback uploaded successfully!")
+            return redirect("results", batch_id=batch.id)
+
+        finally:
+            # Cleanup temp file
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except PermissionError:
+                    logger.warning(f"Could not delete temp file {tmp_path}, still in use.")
 
     return render(request, "upload.html")
-
 
 # ------------------ Results ------------------
 def results(request, batch_id):
