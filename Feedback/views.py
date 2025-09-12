@@ -13,6 +13,8 @@ from django import forms
 from .models import Batch, Subject, Teacher, Performance
 from django.views.decorators.csrf import csrf_protect
 from django.utils import timezone
+from django.views.decorators.http import require_POST
+
 
 
 
@@ -168,23 +170,30 @@ def results(request, batch_id):
         logger.error(f"Error in results view for batch_id {batch_id}: {str(e)}", exc_info=True)
         return JsonResponse({"status": "error", "message": "Internal server error"}, status=500)
 # ------------------ Save Remarks ------------------
-@csrf_protect
-def save_remarks(request, batch_id):
-    if request.method != "POST":
-        logger.warning(f"Invalid request method for save_remarks: {request.method}")
-        return JsonResponse({"status": "error", "message": "Invalid request method"}, status=405)
+# from django.http import JsonResponse
+# from django.views.decorators.csrf import csrf_protect
+# from django.views.decorators.http import require_POST
+# from .models import Batch, Subject, Performance
+# import json
+# import logging
 
+# logger = logging.getLogger(__name__)
+
+@csrf_protect
+@require_POST
+def save_remarks(request, batch_id):
     try:
         batch = Batch.objects.get(id=batch_id)
         logger.debug(f"Request body: {request.body.decode('utf-8')}")
-        data = json.loads(request.body)  # Expect JSON data with remarks
+        data = json.loads(request.body)  # JSON sent from JS
+
         for subject_id, remark in data.items():
             try:
                 subject = Subject.objects.get(id=subject_id, batch=batch)
                 subject.teacher_remarks = remark
                 subject.save()
 
-                # Sync remarks to the corresponding Performance model
+                # Sync to Performance model
                 performance = Performance.objects.filter(batch=batch, subject=subject).first()
                 if performance:
                     performance.remarks = remark
@@ -194,14 +203,18 @@ def save_remarks(request, batch_id):
 
             except Subject.DoesNotExist:
                 logger.error(f"Subject with ID {subject_id} not found for batch {batch_id}")
-                return JsonResponse({"status": "error", "message": f"Subject with ID {subject_id} not found"}, status=404)
+                return JsonResponse({"status": "error", "message": f"Subject {subject_id} not found"}, status=404)
+
         return JsonResponse({"status": "success", "message": "Remarks saved successfully"})
+
     except Batch.DoesNotExist:
         logger.error(f"Batch with ID {batch_id} not found")
         return JsonResponse({"status": "error", "message": "Batch not found"}, status=404)
+
     except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON data in save_remarks: {str(e)}")
+        logger.error(f"Invalid JSON: {str(e)}")
         return JsonResponse({"status": "error", "message": "Invalid JSON data"}, status=400)
+
     except Exception as e:
         logger.error(f"Unexpected error in save_remarks: {str(e)}")
         return JsonResponse({"status": "error", "message": f"Internal server error: {str(e)}"}, status=500)

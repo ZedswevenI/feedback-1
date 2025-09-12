@@ -6,9 +6,9 @@
   <title>EduFeedback Analytics - Results</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- jsPDF (UMD build) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script> -->
 
   <style>
     @media print { .no-print { display: none; } }
@@ -135,9 +135,9 @@
 
       <!-- Buttons -->
       <div class="flex flex-wrap gap-3 justify-center mt-8 no-print">
-        <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to Excel</button>
+        <!-- <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to Excel</button>
         <button onclick="exportToPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to PDF</button>
-        <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Print</button>
+        <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Print</button> -->
         <a href="{% url 'report' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">View Report</a>
         <button onclick="saveRemarks()" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Save Remarks</button>
       </div>
@@ -145,34 +145,54 @@
   </main>
 
 <script>
-  // ✅ Export table to Excel
-  function exportToExcel() {
-    const table = document.querySelector("table"); 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.table_to_sheet(table);
-    XLSX.utils.book_append_sheet(wb, ws, "Results");
-    XLSX.writeFile(wb, "results.xlsx");
+function getCSRFToken() {
+  let cookieValue = null;
+  const name = "csrftoken=";
+  if (document.cookie && document.cookie !== "") {
+    const cookies = document.cookie.split(";");
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.startsWith(name)) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length));
+        break;
+      }
+    }
   }
+  return cookieValue;
+}
 
-  // ✅ Export table to PDF
-  function exportToPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+async function saveRemarks() {
+  const inputs = document.querySelectorAll("input[name^='remarks_']");
+  const remarksData = {};
 
-    doc.text("EduFeedback Results", 14, 16);
-    
-    // Use autoTable to export HTML table
-    doc.autoTable({
-      html: "table",   // pass table directly
-      startY: 25,
-      theme: "grid",
-      headStyles: { fillColor: [41, 128, 185] },
-      styles: { fontSize: 10 }
+  inputs.forEach(input => {
+    const subjectId = input.name.split("_")[1];
+    remarksData[subjectId] = input.value.trim();
+  });
+
+  try {
+    const response = await fetch("{% url 'save_remarks' batch.id %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCSRFToken()
+      },
+      body: JSON.stringify(remarksData)
     });
 
-    doc.save("results.pdf");
+    const result = await response.json();
+    if (response.ok && result.status === "success") {
+      alert("✅ Remarks saved successfully!");
+    } else {
+      alert("❌ Error: " + (result.message || "Failed to save remarks."));
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    alert("⚠️ Unexpected error while saving remarks.");
   }
+}
 </script>
+
 
 </body>
 </html>
