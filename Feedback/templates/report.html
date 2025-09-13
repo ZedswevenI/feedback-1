@@ -1,20 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EduFeedback Analytics - Report</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- jsPDF + AutoTable (autoTable must be after jsPDF) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
+  <!-- SheetJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
   <style>
-    @media print {
-      .no-print { 
-        display: none;
-      }
-    }
+    @media print { .no-print { display: none; } }
+
+    /* keep remark line breaks when printing / on-screen */
+    td.remarks { white-space: pre-wrap; vertical-align: top; }
+
+    /* small table defaults for print */
+    .print-table { width: 100%; border-collapse: collapse; font-family: sans-serif; }
+    .print-table th, .print-table td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    .print-table th { background: #f3f3f3; }
   </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
@@ -28,10 +36,10 @@
     </a>
   </nav>
 
-  <!-- Page Title -->
+  <!-- Page Heading -->
   <div class="max-w-7xl mx-auto mt-6 px-4">
-    <h2 class="text-2xl font-bold text-gray-700">Report Dashboard</h2>
-    <p class="text-gray-500">Filter and analyze teacher performance reports</p>
+    <h2 class="text-2xl font-bold text-gray-700 mb-2">Performance Report</h2>
+    <p class="text-gray-600 mb-6">Here you can view and export the performance feedback data.</p>
   </div>
 
   <!-- Report Filters -->
@@ -76,6 +84,7 @@
       <!-- Multiple Teachers -->
       <div class="flex flex-col" id="teachers_field" style="display: {% if request.GET.mode == 'multiple' %}block{% else %}none{% endif %}">
         <label for="teachers" class="text-sm font-medium text-gray-600 mb-1">Teachers</label>
+        <!-- Consider name="teachers[]" if you want arrays in request -->
         <select id="teachers" name="teachers" multiple 
           class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
           {% for teacher in teachers %}
@@ -126,11 +135,10 @@
     </form>
   </div>
 
-  
-
   <!-- Report Table -->
   <div class="max-w-7xl mx-auto mt-6 bg-white p-6 rounded-2xl shadow-md overflow-x-auto">
-    <table class="table-auto w-full border-collapse">
+    <!-- IMPORTANT: table now has id="reportTable" used by JS -->
+    <table id="reportTable" class="table-auto w-full border-collapse">
       <thead>
         <tr class="bg-blue-50 text-left text-sm font-semibold">
           <th class="p-3 border">Date</th>
@@ -148,15 +156,10 @@
           <td class="p-3 border">{{ perf.batch.batch_code }}</td>
           <td class="p-3 border">{{ perf.subject.teacher.teacher_name }}</td>
           <td class="p-3 border">{{ perf.subject.subject_name }}</td>
-          <td class="p-3 border">
-            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-              <div class="h-4 rounded-full text-xs text-white text-center font-medium"
-                style="width: {{ perf.average_percentage|default:'0' }}%; background-color: {% if perf.average_percentage is not None %}{% if perf.average_percentage >= 80 %}#22c55e{% elif perf.average_percentage >= 60 %}#facc15{% else %}#ef4444{% endif %}{% else %}#cccccc{% endif %};">
-                {{ perf.average_percentage|default:'0' }}%
-              </div>
-            </div>
-          </td>
-          <td class="p-3 border">{{ perf.remarks }}</td>
+          <!-- make sure average_percentage is a number or a % string -->
+          <td class="p-3 border">{{ perf.average_percentage|default:"0" }}</td>
+          <!-- remarks cell gets class "remarks" so whitespace/newlines preserved -->
+          <td class="p-3 border remarks">{{ perf.remarks }}</td>
         </tr>
         {% empty %}
         <tr>
@@ -165,68 +168,155 @@
         {% endfor %}
       </tbody>
     </table>
+
     <!-- Export / Print Buttons -->
-  <div class="flex flex-wrap gap-3 justify-center mt-8 no-print">
-    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to Excel</button>
-    <button onclick="exportToPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to PDF</button>
-    <button onclick="printTable()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Print</button>    
-  </div>
+    <div class="flex flex-wrap gap-3 justify-center mt-8 no-print">
+      <button id="excelBtn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to Excel</button>
+      <button id="pdfBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Export to PDF</button>
+      <button id="printBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm">Print</button>
+    </div>
   </div>
 
   <script>
+    // run on load so initial mode-display is correct
+    document.addEventListener('DOMContentLoaded', function() {
+      updateFields();
+
+      document.getElementById('excelBtn').addEventListener('click', exportToExcel);
+      document.getElementById('pdfBtn').addEventListener('click', exportToPDF);
+      document.getElementById('printBtn').addEventListener('click', printTable);
+    });
+
     function updateFields() {
-      var mode = document.querySelector('select[name="mode"]').value;
+      var mode = document.getElementById('mode').value;
       document.getElementById('teacher_field').style.display = mode === 'individual' ? 'block' : 'none';
       document.getElementById('teachers_field').style.display = mode === 'multiple' ? 'block' : 'none';
       document.getElementById('batch_codes_field').style.display = mode === 'batch' ? 'block' : 'none';
     }
-    updateFields();
-     // ✅ Export table to Excel
-     function printTable() {
-  const table = document.querySelector("table").outerHTML; // get table HTML
-  const newWin = window.open("", "_blank"); // open new window
-  newWin.document.write(`
-    <html>
-      <head>
-        <title>Print Results</title>
-        <style>
-          table { width: 100%; border-collapse: collapse; font-family: sans-serif; }
-          th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-          th { background: #f3f3f3; }
-        </style>
-      </head>
-      <body>${table}</body>
-    </html>
-  `);
-  newWin.document.close();
-  newWin.print();
-} 
-  function exportToExcel() {
-    const table = document.querySelector("table"); 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.table_to_sheet(table);
-    XLSX.utils.book_append_sheet(wb, ws, "Results");
-    XLSX.writeFile(wb, "results.xlsx");
-  }
 
-  // ✅ Export table to PDF
-  function exportToPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    /* ---------- Print ---------- */
+    function printTable() {
+      const table = document.getElementById("reportTable");
+      if (!table) { alert("No table to print"); return; }
+      const newWin = window.open("", "_blank");
+      const html = `
+      <html>
+        <head><title>Print Results</title>
+          <style>
+            table { width: 100%; border-collapse: collapse; font-family: sans-serif; }
+            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
+            th { background: #f3f3f3; }
+            td { white-space: pre-wrap; } /* preserve newlines in remarks */
+          </style>
+        </head>
+        <body>
+          <h3>EduFeedback Results</h3>
+          ${table.outerHTML}
+        </body>
+      </html>`;
+      newWin.document.write(html);
+      newWin.document.close();
+      // small delay can help browsers render content before print; usually works without it
+      newWin.focus();
+      newWin.print();
+    }
 
-    doc.text("EduFeedback Results", 14, 16);
-    
-    // Use autoTable to export HTML table
-    doc.autoTable({
-      html: "table",   // pass table directly
-      startY: 25,
-      theme: "grid",
-      headStyles: { fillColor: [41, 128, 185] },
-      styles: { fontSize: 10 }
-    });
+    /* ---------- Export to Excel (SheetJS) ---------- */
+    function exportToExcel() {
+      const table = document.getElementById("reportTable");
+      if (!table) { alert("No table to export"); return; }
 
-    doc.save("results.pdf");
-  }
+      // Create workbook & sheet from table
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.table_to_sheet(table, {raw: true});
+
+      // Iterate cells to handle Percentage & Remarks formatting
+      Object.keys(ws).forEach(cell => {
+        if (cell[0] === "!") return;
+        const colLetter = cell.replace(/[0-9]/g, "");
+        let val = ws[cell].v;
+
+        // Percentage column is the 5th column => letter "E"
+        if (colLetter === "E") {
+          if (val == null) return;
+          // handle "65", "65%", "0.65"
+          let parsed = null;
+          if (typeof val === "number") parsed = val;
+          else if (typeof val === "string") {
+            const cleaned = val.replace("%", "").trim();
+            parsed = parseFloat(cleaned);
+          }
+          if (!isNaN(parsed)) {
+            // convert percent numbers like 65 -> 0.65 ; if already 0.65 keep
+            if (parsed > 1) parsed = parsed / 100;
+            ws[cell].t = "n";
+            ws[cell].v = parsed;
+            ws[cell].z = "0.00%";
+          }
+        }
+
+        // Remarks column (6th column => "F"): convert into bullet-list with newlines
+        if (colLetter === "F") {
+          if (val == null) return;
+          let parts;
+          if (typeof val === "string") {
+            // split on newlines or common delimiters
+            parts = val.split(/\r?\n|[,;•●\-–—]+/).map(s => s.trim()).filter(Boolean);
+          } else {
+            parts = [String(val)];
+          }
+          if (parts.length > 1) {
+            ws[cell].v = parts.map(p => "• " + p).join("\n");
+          } else {
+            ws[cell].v = "• " + String(parts[0]);
+          }
+          // request wrapText (some clients honor it)
+          ws[cell].s = ws[cell].s || {};
+          ws[cell].s.alignment = Object.assign({}, ws[cell].s.alignment, { wrapText: true, vertical: "top" });
+        }
+      });
+
+      // widen the Remarks column visually
+      ws["!cols"] = ws["!cols"] || [];
+      ws["!cols"][5] = { wch: 60 }; // index 5 => column F
+
+      XLSX.utils.book_append_sheet(wb, ws, "Results");
+      XLSX.writeFile(wb, "results.xlsx");
+    }
+
+    /* ---------- Export to PDF (jsPDF + autoTable) ---------- */
+    function exportToPDF() {
+      const table = document.getElementById("reportTable");
+      if (!table) { alert("No table to export"); return; }
+
+      // jsPDF (UMD) exposed on window.jspdf
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4"
+      });
+
+      doc.setFontSize(14);
+      doc.text("EduFeedback Results", 40, 30);
+
+      // autoTable: use the HTML table directly so it preserves cell content
+      doc.autoTable({
+        html: "#reportTable",
+        startY: 50,
+        theme: "grid",
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { fontSize: 9, cellPadding: 4, overflow: "linebreak" },
+        columnStyles: {
+          // 0-based index; make Remarks wider (index 5 = 6th column)
+          5: { cellWidth: 220 }
+        },
+        // will allow multi-line remarks
+        bodyStyles: { valign: "top" }
+      });
+
+      doc.save("results.pdf");
+    }
   </script>
 </body>
 </html>
