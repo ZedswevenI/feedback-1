@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
-import dj_database_url
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -98,13 +97,11 @@ ASGI_APPLICATION = 'feed.asgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': dj_database_url.parse(
-        "postgresql://postgres:UVcCpkcnfxeRusQLwbxkLChYvbGyOBeM@postgres.railway.internal:5432/railway",
-        conn_max_age=600,
-        ssl_require=False  # set True if Railway requires SSL
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME':os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
