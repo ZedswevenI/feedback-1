@@ -8,3 +8,5 @@ PyPDF2
 pymupdf
 gunicorn
 uvicorn
+psycopg2-binary>=2.9.9
+dj-database-url>=2.1.0
