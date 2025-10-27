@@ -208,11 +208,6 @@ def parse_omr(input_file, debug_dir="bubble_debug_images", expected_questions=20
             y_end = int(h * f_end)
             x_positions = [int(w * xp) for xp in subject_x_positions[subject]]
 
-            # Debug: print band and x-positions for Language, and overlay rectangle
-            if subject.lower().strip() == "language":
-                print(f"[DEBUG] Language band: y={y_start}:{y_end}, x_positions={x_positions}, h={h}, w={w}")
-                if y_end - y_start < 10:
-                    print("[WARNING] Language band height is very small! Check subject order and band calculation.")
             counts, dbg = process_subject_block(
                 page_gray, subject, y_start, y_end, x_positions,
                 stars, expected_questions=expected_questions,
@@ -223,11 +218,6 @@ def parse_omr(input_file, debug_dir="bubble_debug_images", expected_questions=20
                 aggregated[subject][s] += counts[s]
 
             debug_img = cv2.addWeighted(debug_img, 0.7, dbg, 0.3, 0)
-
-            # Overlay a colored rectangle for Language band
-            if subject.lower().strip() == "language":
-                cv2.rectangle(debug_img, (0, y_start), (w-1, y_end), (0, 0, 255), 2)
-                cv2.putText(debug_img, "LANGUAGE BAND", (10, y_start+20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2, cv2.LINE_AA)
 
             # Show raw count directly above each subject block
             total_count = sum(counts.values())

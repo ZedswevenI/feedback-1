@@ -1,3 +1,8 @@
+from django.views.decorators.csrf import csrf_exempt
+from django.core.exceptions import ValidationError
+from django.utils.dateparse import parse_date
+# ------------------ Update Batch Date ------------------
+
 import logging
 import re
 import json
@@ -297,6 +302,7 @@ def report(request):
 
     except Exception as e:
         logger.error(f"Error in report view: {str(e)}", exc_info=True)
+        # Show the actual error for debugging (remove in production)
         return JsonResponse(
-            {"status": "error", "message": "Internal server error"}, status=500
+            {"status": "error", "message": f"Internal server error: {str(e)}"}, status=500
         )
