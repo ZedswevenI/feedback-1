@@ -30,9 +30,17 @@ def process_subject_block(
     th = cv2.bitwise_or(otsu, adp)
     th = cv2.medianBlur(th, 3)
 
-    # Extra boost for Computer: morphological close to merge faint marks
-    if subject == "Computer":
+    # Subject-specific preprocessing
+    subject_lower = subject.lower().strip()
+    
+    # Apply morphological operations for subjects that need bubble enhancement
+    if any(s in subject_lower for s in ["computer", "computer science"]):
+        # Computer/CS: stronger closing for faint marks
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel)
+    elif any(s in subject_lower for s in ["biology", "botany", "zoology"]):
+        # Bio subjects: moderate enhancement
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
         th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel)
 
     # Process each row (bubble line)
@@ -52,13 +60,19 @@ def process_subject_block(
             for c in contours:
                 a = cv2.contourArea(c) * area_boost
 
-                # Subject-specific thresholds
-                if subject == "Computer":
-                    local_min_area = 18
-                elif subject == "English":
-                    local_min_area = 20
+                # Subject-specific thresholds based on bubble characteristics
+                if any(s in subject_lower for s in ["computer", "computer science"]):
+                    local_min_area = 18  # More sensitive for CS
+                elif subject_lower == "english":
+                    local_min_area = 20  # English standard threshold
+                elif subject_lower in ["mat", "maths", "mathematics"]:
+                    local_min_area = 22  # Math needs clear marks
+                elif any(s in subject_lower for s in ["biology", "botany", "zoology"]):
+                    local_min_area = 20  # Bio subjects standard threshold
+                elif subject_lower in ["social", "language"]:
+                    local_min_area = 18  # More forgiving for these
                 else:
-                    local_min_area = min_area
+                    local_min_area = min_area  # Default threshold
 
                 if a > local_min_area and a > max_area:
                     max_area = a
@@ -100,32 +114,77 @@ def load_images(input_file: str) -> list:
     return images
 
 
+# ------------------ CLASS/SUBJECT DEFAULTS ------------------
+CLASS_SUBJECTS = {
+    # 9th and 10th
+    "9": ["Physics", "Chemistry", "Maths", "Biology", "Social", "English", "Language", "MAT"],
+    "10": ["Physics", "Chemistry", "Maths", "Biology", "Social", "English", "Language", "MAT"],
+    # 11th and 12th JEE stream
+    "11-jee": ["Physics", "Chemistry", "Maths", "Computer Science", "English"],
+    "12-jee": ["Physics", "Chemistry", "Maths", "Computer Science", "English"],
+    # 11th and 12th Medical stream
+    "11-medical": ["Physics", "Chemistry", "Botany", "Zoology", "Maths", "English"],
+    "12-medical": ["Physics", "Chemistry", "Botany", "Zoology", "Maths", "English"]
+}
+
 # ------------------ MAIN PARSER ------------------
-def parse_omr(input_file, debug_dir="bubble_debug_images", expected_questions=20):
-    # Adjusted subject Y ranges
-    subject_y_fracs = {
-        "Physics":   (0.12, 0.27),
-        "Chemistry": (0.28, 0.42),
-        "Maths":     (0.43, 0.58),
-        "English":   (0.59, 0.70),
-        "Computer":  (0.71, 0.96),
-    }
+def parse_omr(input_file, debug_dir="bubble_debug_images", expected_questions=20, subjects=None, phase=None):
+    """Parse OMR sheet and compute results.
+    
+    Args:
+        input_file: PDF/image path
+        debug_dir: Output directory for debug images
+        expected_questions: Questions per subject
+        subjects: List of subjects to process. If None, uses phase to determine subjects.
+        phase: Class/stream (e.g., "9th", "11 JEE", "12 Medical"). Used if subjects=None.
+    """
+    # If no subjects provided, try to determine from phase
+    if not subjects and phase:
+        # Normalize phase string to match CLASS_SUBJECTS keys
+        p = phase.lower().strip()
+        class_key = None
+        
+        # Handle various phase formats
+        if "9" in p or "9th" in p or "class 9" in p:
+            class_key = "9"
+        elif "10" in p or "10th" in p or "class 10" in p:
+            class_key = "10"
+        elif ("11" in p or "11th" in p or "class 11" in p):
+            if "jee" in p:
+                class_key = "11-jee"
+            elif "med" in p:  # match medical/med
+                class_key = "11-medical"
+        elif ("12" in p or "12th" in p or "class 12" in p):
+            if "jee" in p:
+                class_key = "12-jee"
+            elif "med" in p:  # match medical/med
+                class_key = "12-medical"
+        
+        if class_key in CLASS_SUBJECTS:
+            subjects = CLASS_SUBJECTS[class_key]
+        else:
+            # Default to basic subjects if phase unknown
+            subjects = ["Physics", "Chemistry", "Maths", "English"]
+    elif not subjects:
+        subjects = ["Physics", "Chemistry", "Maths", "English"]  # Minimum default
 
-    subject_x_positions = {
-        "Physics":   [0.28, 0.45, 0.62],
-        "Chemistry": [0.27, 0.44, 0.61],
-        "Maths":     [0.28, 0.45, 0.62],
-        "English":   [0.28, 0.45, 0.62],
-        "Computer":  [0.26, 0.45, 0.61],
-    }
+    # Calculate Y ranges dynamically based on number of subjects
+    y_top, y_bottom = 0.12, 0.96  # Keep same total usable height
+    span = (y_bottom - y_top) / max(1, len(subjects))
+    
+    # Create Y ranges dictionary dynamically with small gaps
+    subject_y_fracs = {}
+    for i, subject in enumerate(subjects):
+        f_start = y_top + i * span
+        f_end = f_start + span * 0.85  # Small gap between subjects (85% of span)
+        subject_y_fracs[subject] = (f_start, min(f_end, y_bottom))
 
-    subject_boosts = {
-        "Physics": 1.0,
-        "Chemistry": 1.0,
-        "Maths": 1.0,
-        "English": 1.0,   # 🔥 more sensitive
-        "Computer": 1.0,  # 🔥 stronger boost
-    }
+    # X positions optimized for bubble columns
+    default_x = [0.28, 0.45, 0.62]  # Three-column layout
+    subject_x_positions = {subject: default_x for subject in subjects}
+
+    # Default boost of 1.0 for all subjects
+    subject_boosts = {subject: 1.0 for subject in subjects}
 
     stars = ["5_star", "3_star", "1_star"]
     star_values = {"5_star": 5, "3_star": 3, "1_star": 1}
@@ -149,6 +208,11 @@ def parse_omr(input_file, debug_dir="bubble_debug_images", expected_questions=20
             y_end = int(h * f_end)
             x_positions = [int(w * xp) for xp in subject_x_positions[subject]]
 
+            # Debug: print band and x-positions for Language, and overlay rectangle
+            if subject.lower().strip() == "language":
+                print(f"[DEBUG] Language band: y={y_start}:{y_end}, x_positions={x_positions}, h={h}, w={w}")
+                if y_end - y_start < 10:
+                    print("[WARNING] Language band height is very small! Check subject order and band calculation.")
             counts, dbg = process_subject_block(
                 page_gray, subject, y_start, y_end, x_positions,
                 stars, expected_questions=expected_questions,
@@ -159,6 +223,11 @@ def parse_omr(input_file, debug_dir="bubble_debug_images", expected_questions=20
                 aggregated[subject][s] += counts[s]
 
             debug_img = cv2.addWeighted(debug_img, 0.7, dbg, 0.3, 0)
+
+            # Overlay a colored rectangle for Language band
+            if subject.lower().strip() == "language":
+                cv2.rectangle(debug_img, (0, y_start), (w-1, y_end), (0, 0, 255), 2)
+                cv2.putText(debug_img, "LANGUAGE BAND", (10, y_start+20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2, cv2.LINE_AA)
 
             # Show raw count directly above each subject block
             total_count = sum(counts.values())

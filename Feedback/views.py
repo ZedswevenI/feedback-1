@@ -90,9 +90,12 @@ def upload(request):
                     tmp_file.write(chunk)
                 tmp_path = tmp_file.name
 
-            # Parse OMR
+            # Parse OMR - pass both phase (for layout) and explicit subject list
+            cleaned_subjects = [s.strip() for s in subject_names]
             per_form_data, aggregated_results, percentage_results = parse_omr(
-                tmp_path, debug_dir="bubble_debug_images"
+                tmp_path, debug_dir="bubble_debug_images",
+                subjects=cleaned_subjects,
+                phase=phase  # Let parser use phase to select appropriate layout
             )
 
             # Save subjects and performances

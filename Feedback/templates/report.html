@@ -66,8 +66,8 @@
         </select>
       </div>
 
-      <!-- Individual Teacher -->
-      <div class="flex flex-col" id="teacher_field" style="display: {% if request.GET.mode == 'individual' %}block{% else %}none{% endif %}">
+  <!-- Individual Teacher -->
+  <div id="teacher_field" class="{% if request.GET.mode == 'individual' %}flex flex-col{% else %}flex flex-col hidden{% endif %}">
         <label for="teacher" class="text-sm font-medium text-gray-600 mb-1">Teacher</label>
         <select id="teacher" name="teacher" 
           class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">
@@ -80,8 +80,8 @@
         </select>
       </div>
 
-      <!-- Multiple Teachers -->
-      <div class="flex flex-col" id="teachers_field" style="display: {% if request.GET.mode == 'multiple' %}block{% else %}none{% endif %}">
+  <!-- Multiple Teachers -->
+  <div id="teachers_field" class="{% if request.GET.mode == 'multiple' %}flex flex-col{% else %}flex flex-col hidden{% endif %}">
         <label for="teachers" class="text-sm font-medium text-gray-600 mb-1">Teachers</label>
         <!-- Consider name="teachers[]" if you want arrays in request -->
         <select id="teachers" name="teachers" multiple 
@@ -95,8 +95,8 @@
         </select>
       </div>
 
-      <!-- Batch Codes -->
-      <div class="flex flex-col" id="batch_codes_field" style="display: {% if request.GET.mode == 'batch' %}block{% else %}none{% endif %}">
+  <!-- Batch Codes -->
+  <div id="batch_codes_field" class="{% if request.GET.mode == 'batch' %}flex flex-col{% else %}flex flex-col hidden{% endif %}">
         <label for="batch_codes" class="text-sm font-medium text-gray-600 mb-1">Batch Codes</label>
         <select id="batch_codes" name="batch_codes" multiple 
           class="border rounded-lg p-2 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none">

@@ -48,6 +48,14 @@
     <h2 class="text-lg font-semibold mb-2">Upload OMR Sheet for Analysis</h2>
     <p class="text-gray-600 mb-6">Upload student feedback OMR sheets and enter batch details for comprehensive analysis.</p>
 
+    {% if messages %}
+      <div class="mb-4">
+        {% for message in messages %}
+          <div class="p-3 rounded {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
     <form method="POST" enctype="multipart/form-data" id="omrForm" class="bg-white p-6 rounded shadow">
       {% csrf_token %}
 
@@ -55,27 +63,27 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
           <label class="block text-gray-700 font-medium">Batch Code *</label>
-          <input type="text" name="batch_code" placeholder=" BATCH2024A1" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <input type="text" name="batch_code" placeholder=" BATCH2024A1" value="{{ form_data.batch_code|default:'' }}" class="w-full border border-gray-300 p-2 rounded mt-1" required>
           <span class="error-message" id="batchCodeError">Batch Code is required.</span>
         </div>
         <div>
           <label class="block text-gray-700 font-medium">Phase *</label>
-          <input type="text" name="phase" placeholder="Phase" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <input type="text" name="phase" placeholder="Phase" value="{{ form_data.phase|default:'' }}" class="w-full border border-gray-300 p-2 rounded mt-1" required>
           <span class="error-message" id="phaseError">Phase is required.</span>
         </div>
         <div>
           <label class="block text-gray-700 font-medium">Total Students *</label>
-          <input type="number" name="total_students" placeholder="TotalStudents" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <input type="number" name="total_students" placeholder="TotalStudents" value="{{ form_data.total_students|default:'' }}" class="w-full border border-gray-300 p-2 rounded mt-1" required>
           <span class="error-message" id="totalStudentsError">Total Students must be a positive number.</span>
         </div>
         <div>
           <label class="block text-gray-700 font-medium">Total Responsive *</label>
-          <input type="number" name="total_responsive" placeholder="TotalResponsive" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <input type="number" name="total_responsive" placeholder="TotalResponsive" value="{{ form_data.total_responsive|default:'' }}" class="w-full border border-gray-300 p-2 rounded mt-1" required>
           <span class="error-message" id="totalResponsiveError">Total Responsive must be a positive number.</span>
         </div>
         <div>
           <label class="block text-gray-700 font-medium">Date *</label>
-          <input type="date" name="date" id="dateField" class="w-full border border-gray-300 p-2 rounded mt-1" required>
+          <input type="date" name="date" id="dateField" value="{{ form_data.date|default:'' }}" class="w-full border border-gray-300 p-2 rounded mt-1" required>
           <span class="error-message" id="dateError">Please select a valid date.</span>
         </div>
       </div>
