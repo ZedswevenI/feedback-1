@@ -121,7 +121,9 @@ def upload(request):
                 # ✅ Format percentage to 2 decimals with trailing zero
                 average_percentage = float(f"{average_percentage:.2f}")
 
-                teacher_obj, _ = Teacher.objects.get_or_create(teacher_name=teacher_name.strip())
+                teacher_obj = Teacher.objects.filter(teacher_name=teacher_name.strip()).first()
+                if not teacher_obj:
+                    teacher_obj = Teacher.objects.create(teacher_name=teacher_name.strip())
 
                 subject_obj = Subject.objects.create(
                     batch=batch,
